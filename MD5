@@ -1,7 +1,7 @@
-1e11b647656181ca51de8f9884db0843 *DESCRIPTION
+18e3d7e7fe799854fc91c10ef5aaa84f *DESCRIPTION
 3b45295e35ebb09a0f803f27e48c1580 *NAMESPACE
 b21583e5fd156569b25b07a268501a13 *R/R6Model.R
-f8a6ecc83032654e23cf9aed5b968e2a *R/R6covariance.R
+fab7a866319182486db31f48071a04cc *R/R6covariance.R
 62a138b558475ade0b8824681e92ae96 *R/R6meanfunction.R
 93d51d48b0810dfe43838a6e43940aea *R/RcppExports.R
 97ff12177c3f5ca9b83d47766efa6026 *R/d_funcs.R
@@ -11,7 +11,7 @@ e922e71b721563d939f7248b6808d211 *R/extrafunctions.R
 9d8c8b850e33a3ca3e1c474f742a9196 *R/staircase_crt.R
 66d133c6ad451b3fdc0308288131ec11 *R/steppedwedge.R
 885019034d0ec0218a91bfef039e81be *README.md
-f711c6695eeec997a46139654ef1797b *build/partial.rdb
+d7d4165858add8e7401211aa2856c254 *build/partial.rdb
 2673230644bccf9b7b391848b566cb27 *inst/include/glmmr.h
 81f23db0a617f43cbeb972efa90ccc49 *man/Covariance.Rd
 ac7f84485090a9f780d51e0129d67181 *man/MeanFunction.Rd
