@@ -1,7 +1,7 @@
-fd738e50f452b88982c523ebefe8818f *DESCRIPTION
+6c005325cb527dbc78056cca4acd87db *DESCRIPTION
 3b45295e35ebb09a0f803f27e48c1580 *NAMESPACE
 dd236578836760eb64318ce35849c456 *R/Betadist.R
-f07c84b7afea4b3e6e28c37e447c7a03 *R/R6Model.R
+8f4ee915912f9f5b3491f2abd62073c7 *R/R6Model.R
 3d6b536d753d57200afe558ce272c901 *R/R6covariance.R
 2fc8e0b0de1628d8703db5a93c35515c *R/R6meanfunction.R
 2164d7bfc2b89682b926b8d9d0759a5a *R/RcppExports.R
@@ -11,10 +11,11 @@ e922e71b721563d939f7248b6808d211 *R/extrafunctions.R
 75256445b0ef7dbd9735b93a3f77792e *R/parallel_crt.R
 f9a145c353c8f63acd9370b137b10b08 *R/staircase_crt.R
 458c58daa0f03a2c94f573f6aef96285 *R/steppedwedge.R
-e0f343584b9246c22e1c79a9d202d862 *build/partial.rdb
+e8e626a69673edbd09b09e064cf71066 *README.md
+073bbf4d2f19c9113383ec192da3d158 *build/partial.rdb
 35a1b04cc46a18f178cc78f6db57ce05 *inst/include/glmmr.h
 ecb2e2f152549bc548efa3a16e846412 *inst/include/glmmr/DData.h
-50fd62ba88e56633429208b4eea23bd7 *inst/include/glmmr/DMatrix.h
+4b251cf46d9308f9a8a51fccfa06632c *inst/include/glmmr/DMatrix.h
 f739f50e3fb8c8c68a4153d1a8291a98 *inst/include/glmmr/algo.h
 dbe7f453b2db77143ed684171a2d2168 *inst/include/glmmr/maths.h
 d55fb4caabaf6a8b27d276c6156ec462 *man/Beta.Rd
