@@ -2,8 +2,10 @@ functions {
   real partial_sum1_lpdf(array[] real y, int start, int end){
     return std_normal_lpdf(y[start:end]);
   }
-  real partial_sum2_lpmf(array[] int y,int start, int end, vector mu){
-    return poisson_log_lpmf(y[start:end]|mu[start:end]);
+  real partial_sum2_lpmf(array[] int y,int start, int end,vector mu,real phi, int type){
+    real out;
+    if(type==1) out = beta_lpdf(y[start:end]|mu*phi, (1-mu)*phi);
+    return out;
   }
 }
 data {
@@ -11,15 +13,19 @@ data {
   int Q; // columns of Z, size of RE terms
   vector[N] Xb;
   matrix[N,Q] Z;
-  array[N] int y;
+  array[N] real y;
+  real var_par;
   int type;
 }
 parameters {
   array[Q] real gamma;
 }
+transformed parameters {
+  vector[N] logitmu = 1/(1+exp(-1*Xb - Z*to_vector(gamma)));
+}
 model {
   int grainsize = 1;
   target += reduce_sum(partial_sum1_lpdf,gamma,grainsize);
-  target += reduce_sum(partial_sum2_lpmf,y,grainsize,Xb + Z*to_vector(gamma));
+  target += reduce_sum(partial_sum2_lpmf,y,grainsize,logitmu,var_par,type);
 }
 

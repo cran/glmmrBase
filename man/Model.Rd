@@ -71,14 +71,18 @@ parameter estimates.
 The accuracy of the algorithm depends on the user specified tolerance. For higher levels of
 tolerance, larger numbers of MCMC samples are likely need to sufficiently reduce Monte Carlo error.
 
-Options for the MCMC sampler are set by changing the values in \code{self$mcmc_options}
+Options for the MCMC sampler are set by changing the values in \code{self$mcmc_options}.
+
+To provide weights for the model fitting, store them in self$weights. To set the number of
+trials for binomial models, set self$trials.
 
 \strong{Laplace approximation}
 Fits generalised linear mixed models using Laplace approximation to the log likelihood. For non-Gaussian models
 the covariance matrix is approximated using the first order approximation based on the marginal
 quasilikelihood proposed by Breslow and Clayton (1993). The marginal mean in this approximation
 can be further adjusted following the proposal of Zeger et al (1988), use the member function \code{use_attenuated()} in this
-class, see \link[glmmrBase]{Model}.
+class, see \link[glmmrBase]{Model}. To provide weights for the model fitting, store them in self$weights. To
+set the number of trials for binomial models, set self$trials.
 }
 \examples{
 
@@ -86,12 +90,14 @@ class, see \link[glmmrBase]{Model}.
 ## Method `Model$new`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 #create a data frame describing a cross-sectional parallel cluster
 #randomised trial
 df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
-
 mod <- Model$new(
   formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
   data = df,
@@ -106,7 +112,7 @@ df[df$t > 3, 'int'] <- 1
 des <- Model$new(
   covariance = list(
     formula = ~ (1|gr(ind)),
-    parameters = c(0.25)),
+    parameters = c(0.05)),
   mean = list(
     formula = ~ int,
     parameters = c(1,0.5)),
@@ -116,7 +122,7 @@ des <- Model$new(
 # or as
 des <- Model$new(
   formula = ~ int + (1|gr(ind)),
-  covariance = list(parameters = c(0.25)),
+  covariance = list(parameters = c(0.05)),
   mean = list(parameters = c(1,0.5)),
   data = df,
   family = stats::poisson()
@@ -125,27 +131,10 @@ des <- Model$new(
 
 #an example of a spatial grid with two time points
 df <- nelder(~ (x(10)*y(10))*t(2))
-spt_design <- Model$new(covariance = list( formula = ~(1|ar1(t)*fexp(x,y))),
+spt_design <- Model$new(covariance = list( formula = ~(1|ar0(t)*fexp(x,y))),
                          mean = list(formula = ~ 1),
                          data = df,
                          family = stats::gaussian())
-
-## ------------------------------------------------
-## Method `Model$subset_rows`
-## ------------------------------------------------
-
-#generate a stepped wedge design and remove the first sequence
-des <- stepped_wedge(8,10,icc=0.05)
-ids_to_keep <- which(des$mean$data$J!=1)
-des$subset_rows(ids_to_keep)
-
-## ------------------------------------------------
-## Method `Model$subset_cols`
-## ------------------------------------------------
-
-#generate a stepped wedge design and remove first and last time periods
-des <- stepped_wedge(8,10,icc=0.05)
-des$subset_cols(c(2:8,10))
 
 ## ------------------------------------------------
 ## Method `Model$sim_data`
@@ -154,10 +143,13 @@ des$subset_cols(c(2:8,10))
 df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 des <- Model$new(
   covariance = list(
-    formula = ~ (1|gr(cl)*ar1(t)),
-    parameters = c(0.25,0.8)),
+    formula = ~ (1|gr(cl)*ar0(t)),
+    parameters = c(0.05,0.8)),
   mean = list(
     formula = ~ factor(t) + int - 1,
     parameters = c(rep(0,5),0.6)),
@@ -170,13 +162,16 @@ ysim <- des$sim_data()
 ## Method `Model$check`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
   covariance = list(
-    formula = ~ (1|gr(cl)*ar1(t)),
-    parameters = c(0.25,0.8)),
+    formula = ~ (1|gr(cl)*ar0(t)),
+    parameters = c(0.05,0.8)),
   mean = list(
     formula = ~ factor(t) + int - 1,
     parameters = c(rep(0,5),0.6)),
@@ -193,12 +188,15 @@ des$check() #updates
 ## Method `Model$update_parameters`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
   covariance = list(
-    formula = ~ (1|gr(cl)*ar1(t))),
+    formula = ~ (1|gr(cl)*ar0(t))),
   mean = list(
     formula = ~ factor(t) + int - 1),
   data = df,
@@ -210,13 +208,16 @@ des$update_parameters(cov.pars = c(0.1,0.9))
 ## Method `Model$power`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
   covariance = list(
     formula = ~ (1|gr(cl)) + (1|gr(cl,t)),
-    parameters = c(0.25,0.1)),
+    parameters = c(0.05,0.1)),
   mean = list(
     formula = ~ factor(t) + int - 1,
     parameters = c(rep(0,5),0.6)),
@@ -238,8 +239,8 @@ df$int <- 0
 df[df$cl > 3, 'int'] <- 1 
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
-  formula= ~ factor(t) + int - 1 +(1|gr(cl)*ar1(t)),
-  covariance = list(parameters = c(0.25,0.7)),
+  formula= ~ factor(t) + int - 1 +(1|gr(cl)*ar0(t)),
+  covariance = list(parameters = c(0.05,0.7)),
   mean = list(parameters = c(rep(0,5),0.2)),
   data = df,
   family = gaussian(),
@@ -262,6 +263,9 @@ fit5 <- des$MCML(y = ysim, method="mcnr") # it should converge much more quickly
 ## Method `Model$LA`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 #create example data with six clusters, five time periods, and five people per cluster-period
 df <- nelder(~(cl(6)*t(5)) > ind(5))
 # parallel trial design intervention indicator
@@ -269,8 +273,8 @@ df$int <- 0
 df[df$cl > 3, 'int'] <- 1 
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
-  formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar1(t)),
-  covariance = list( parameters = c(0.25,0.7)),
+  formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar0(t)),
+  covariance = list( parameters = c(0.05,0.7)),
   mean = list(parameters = c(rep(0,5),-0.2)),
   data = df,
   family = stats::binomial()
@@ -306,7 +310,9 @@ Biometrics, 44(4), 1049.\url{doi:10.2307/2531734}
 
 \item{\code{family}}{One of the family function used in R's glm functions. See \link[stats]{family} for details}
 
-\item{\code{exp_condition}}{A vector indicting the unique experimental conditions for each observation, see Details.}
+\item{\code{weights}}{A vector indicting the weights for the observations.}
+
+\item{\code{trials}}{For binomial family models, the number of trials for each observation. The default is 1 (bernoulli).}
 
 \item{\code{formula}}{The formula for the model. May be empty if separate formulae are specified for the mean and covariance components.}
 
@@ -346,6 +352,8 @@ require larger numbers of steps and so is slower. Smaller numbers are likely req
 \item \href{#method-Model-check}{\code{Model$check()}}
 \item \href{#method-Model-update_parameters}{\code{Model$update_parameters()}}
 \item \href{#method-Model-information_matrix}{\code{Model$information_matrix()}}
+\item \href{#method-Model-sandwich}{\code{Model$sandwich()}}
+\item \href{#method-Model-kenward_roger}{\code{Model$kenward_roger()}}
 \item \href{#method-Model-power}{\code{Model$power()}}
 \item \href{#method-Model-w_matrix}{\code{Model$w_matrix()}}
 \item \href{#method-Model-dh_deta}{\code{Model$dh_deta()}}
@@ -354,7 +362,8 @@ require larger numbers of steps and so is slower. Smaller numbers are likely req
 \item \href{#method-Model-LA}{\code{Model$LA()}}
 \item \href{#method-Model-sparse}{\code{Model$sparse()}}
 \item \href{#method-Model-mcmc_sample}{\code{Model$mcmc_sample()}}
-\item \href{#method-Model-log_gradient}{\code{Model$log_gradient()}}
+\item \href{#method-Model-gradient}{\code{Model$gradient()}}
+\item \href{#method-Model-partial_sigma}{\code{Model$partial_sigma()}}
 \item \href{#method-Model-u}{\code{Model$u()}}
 \item \href{#method-Model-log_likelihood}{\code{Model$log_likelihood()}}
 \item \href{#method-Model-clone}{\code{Model$clone()}}
@@ -453,6 +462,8 @@ Create a new Model object
   family = NULL,
   var_par = NULL,
   offset = NULL,
+  weights = NULL,
+  trials = NULL,
   verbose = TRUE
 )}\if{html}{\out{</div>}}
 }
@@ -484,6 +495,11 @@ objects, or as members of the list of arguments to \code{mean}. Current accepts 
 
 \item{\code{offset}}{A vector of offset values. Optional - could be provided to the argument to mean instead.}
 
+\item{\code{weights}}{A vector of weights. Optional..}
+
+\item{\code{trials}}{For binomial family models, the number of trials for each observation. If it is not set, then it will
+default to 1 (a bernoulli model).}
+
 \item{\code{verbose}}{Logical indicating whether to provide detailed output}
 }
 \if{html}{\out{</div>}}
@@ -493,12 +509,14 @@ A new Model class object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{#create a data frame describing a cross-sectional parallel cluster
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+#create a data frame describing a cross-sectional parallel cluster
 #randomised trial
 df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
-
 mod <- Model$new(
   formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
   data = df,
@@ -513,7 +531,7 @@ df[df$t > 3, 'int'] <- 1
 des <- Model$new(
   covariance = list(
     formula = ~ (1|gr(ind)),
-    parameters = c(0.25)),
+    parameters = c(0.05)),
   mean = list(
     formula = ~ int,
     parameters = c(1,0.5)),
@@ -523,7 +541,7 @@ des <- Model$new(
 # or as
 des <- Model$new(
   formula = ~ int + (1|gr(ind)),
-  covariance = list(parameters = c(0.25)),
+  covariance = list(parameters = c(0.05)),
   mean = list(parameters = c(1,0.5)),
   data = df,
   family = stats::poisson()
@@ -532,7 +550,7 @@ des <- Model$new(
 
 #an example of a spatial grid with two time points
 df <- nelder(~ (x(10)*y(10))*t(2))
-spt_design <- Model$new(covariance = list( formula = ~(1|ar1(t)*fexp(x,y))),
+spt_design <- Model$new(covariance = list( formula = ~(1|ar0(t)*fexp(x,y))),
                          mean = list(formula = ~ 1),
                          data = df,
                          family = stats::gaussian())
@@ -598,17 +616,6 @@ other rows will be removed from the mean function and covariance
 \subsection{Returns}{
 The function updates the object and nothing is returned
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{#generate a stepped wedge design and remove the first sequence
-des <- stepped_wedge(8,10,icc=0.05)
-ids_to_keep <- which(des$mean$data$J!=1)
-des$subset_rows(ids_to_keep)
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Model-subset_cols"></a>}}
@@ -631,16 +638,6 @@ Removes the specified columns from the linked mean function object's X matrix.
 \subsection{Returns}{
 The function updates the object and nothing is returned
 }
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{#generate a stepped wedge design and remove first and last time periods
-des <- stepped_wedge(8,10,icc=0.05)
-des$subset_cols(c(2:8,10))
-}
-\if{html}{\out{</div>}}
-
-}
-
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Model-sim_data"></a>}}
@@ -672,10 +669,13 @@ Either a vector, a data frame, or a list
 \preformatted{df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 des <- Model$new(
   covariance = list(
-    formula = ~ (1|gr(cl)*ar1(t)),
-    parameters = c(0.25,0.8)),
+    formula = ~ (1|gr(cl)*ar0(t)),
+    parameters = c(0.05,0.8)),
   mean = list(
     formula = ~ factor(t) + int - 1,
     parameters = c(rep(0,5),0.6)),
@@ -696,7 +696,7 @@ ysim <- des$sim_data()
 Checks for any changes in linked objects and updates.
 
 Checks for any changes in any object and updates all linked objects if
-any are detected. Generally called automatically.
+any are detected. Generally called automatically and not required by the user.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Model$check(verbose = TRUE)}\if{html}{\out{</div>}}
 }
@@ -713,13 +713,16 @@ Linked objects are updated by nothing is returned
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(10)*t(5)) > ind(10))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
   covariance = list(
-    formula = ~ (1|gr(cl)*ar1(t)),
-    parameters = c(0.25,0.8)),
+    formula = ~ (1|gr(cl)*ar0(t)),
+    parameters = c(0.05,0.8)),
   mean = list(
     formula = ~ factor(t) + int - 1,
     parameters = c(rep(0,5),0.6)),
@@ -761,12 +764,15 @@ Updates the parameters of the mean function and/or the covariance function
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(10)*t(5)) > ind(10))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
   covariance = list(
-    formula = ~ (1|gr(cl)*ar1(t))),
+    formula = ~ (1|gr(cl)*ar0(t))),
   mean = list(
     formula = ~ factor(t) + int - 1),
   data = df,
@@ -785,7 +791,41 @@ des$update_parameters(cov.pars = c(0.1,0.9))
 \subsection{Method \code{information_matrix()}}{
 Generates the information matrix of the GLS estimator
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$information_matrix()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$information_matrix(include.re = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{include.re}}{logical indicating whether to return the information matrix including the random effects components (TRUE),
+or the GLS information matrix for beta only.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A PxP matrix
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-sandwich"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-sandwich}{}}}
+\subsection{Method \code{sandwich()}}{
+Returns the robust sandwich variance-covariance matrix for the fixed effect parameters
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$sandwich()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+A PxP matrix
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-kenward_roger"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-kenward_roger}{}}}
+\subsection{Method \code{kenward_roger()}}{
+Returns the bias-corrected variance-covariance matrix for the fixed effect parameters.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$kenward_roger()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
@@ -826,13 +866,16 @@ errors and estimated power.
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(10)*t(5)) > ind(10))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
   covariance = list(
     formula = ~ (1|gr(cl)) + (1|gr(cl,t)),
-    parameters = c(0.25,0.1)),
+    parameters = c(0.05,0.1)),
   mean = list(
     formula = ~ factor(t) + int - 1,
     parameters = c(rep(0,5),0.6)),
@@ -908,6 +951,7 @@ Markov Chain Monte Carlo Maximum Likelihood  model fitting
   verbose = TRUE,
   tol = 0.01,
   max.iter = 30,
+  se = "gls",
   sparse = FALSE,
   usestan = TRUE
 )}\if{html}{\out{</div>}}
@@ -929,6 +973,9 @@ not do this step), defaults to FALSE.}
 between iterations at which to stop the algorithm.}
 
 \item{\code{max.iter}}{Integer. The maximum number of iterations of the MCML algorithm.}
+
+\item{\code{se}}{String. Type of standard error to return. Options are "gls" for GLS standard errors (the default),
+"robust" for Huber robust sandwich estimator, and "kr" for Kenward-Roger bias corrected standard errors.}
 
 \item{\code{sparse}}{Logical indicating whether to use sparse matrix methods}
 
@@ -952,8 +999,8 @@ df$int <- 0
 df[df$cl > 3, 'int'] <- 1 
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
-  formula= ~ factor(t) + int - 1 +(1|gr(cl)*ar1(t)),
-  covariance = list(parameters = c(0.25,0.7)),
+  formula= ~ factor(t) + int - 1 +(1|gr(cl)*ar0(t)),
+  covariance = list(parameters = c(0.05,0.7)),
   mean = list(parameters = c(rep(0,5),0.2)),
   data = df,
   family = gaussian(),
@@ -983,7 +1030,15 @@ fit5 <- des$MCML(y = ysim, method="mcnr") # it should converge much more quickly
 \subsection{Method \code{LA()}}{
 Maximum Likelihood model fitting with Laplace Approximation
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$LA(y, start, method = "nr", verbose = FALSE, max.iter = 40, tol = 0.01)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$LA(
+  y,
+  start,
+  method = "nr",
+  verbose = FALSE,
+  se = "gls",
+  max.iter = 40,
+  tol = 0.01
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -997,6 +1052,9 @@ Maximum Likelihood model fitting with Laplace Approximation
 
 \item{\code{verbose}}{logical indicating whether to provide detailed algorithm feedback (default is TRUE).}
 
+\item{\code{se}}{String. Type of standard error to return. Options are "gls" for GLS standard errors (the default),
+"robust" for Huber robust sandwich estimator, and "kr" for Kenward-Roger bias corrected standard errors.}
+
 \item{\code{max.iter}}{Maximum number of algorithm iterations, default 20.}
 
 \item{\code{tol}}{Maximum difference between successive iterations at which to terminate the algorithm}
@@ -1008,15 +1066,18 @@ A \code{mcml} object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{#create example data with six clusters, five time periods, and five people per cluster-period
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+#create example data with six clusters, five time periods, and five people per cluster-period
 df <- nelder(~(cl(6)*t(5)) > ind(5))
 # parallel trial design intervention indicator
 df$int <- 0
 df[df$cl > 3, 'int'] <- 1 
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
-  formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar1(t)),
-  covariance = list( parameters = c(0.25,0.7)),
+  formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar0(t)),
+  covariance = list( parameters = c(0.05,0.7)),
   mean = list(parameters = c(rep(0,5),-0.2)),
   data = df,
   family = stats::binomial()
@@ -1078,15 +1139,15 @@ A matrix of samples of the random effects
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Model-log_gradient"></a>}}
-\if{latex}{\out{\hypertarget{method-Model-log_gradient}{}}}
-\subsection{Method \code{log_gradient()}}{
+\if{html}{\out{<a id="method-Model-gradient"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-gradient}{}}}
+\subsection{Method \code{gradient()}}{
 The gradient of the log-likelihood with respect to either the random effects or
 the model parameters. The random effects are on the N(0,I) scale, i.e. scaled by the
 Cholesky decomposition of the matrix D. To obtain the random effects from the last
 model fit, see member function \verb{$u}
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$log_gradient(y, u, beta = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$gradient(y, u, beta = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1102,6 +1163,25 @@ model fit, see member function \verb{$u}
 }
 \subsection{Returns}{
 A vector of the gradient
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-partial_sigma"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-partial_sigma}{}}}
+\subsection{Method \code{partial_sigma()}}{
+The partial derivatives of the covariance matrix Sigma with respect to the covariance
+parameters. The function returns a list in order: Sigma, first order derivatives, second
+order derivatives. The second order derivatives are ordered as the lower-triangular matrix
+in column major order. Letting 'd(i)' mean the first-order partial derivative with respect
+to parameter i, and d2(i,j) mean the second order derivative with respect to parameters i
+and j, then if there were three covariance parameters the order of the output would be:
+(sigma, d(1), d(2), d(3), d2(1,1), d2(1,2), d2(1,3), d2(2,2), d2(2,3), d2(3,3)).
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$partial_sigma()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+A list of matrices, see description for contents of the list.
 }
 }
 \if{html}{\out{<hr>}}

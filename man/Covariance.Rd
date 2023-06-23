@@ -34,25 +34,22 @@ There are several common functions included for a named variable in data \code{x
 A non-exhaustive list (see \href{https://github.com/samuel-watson/glmmrBase/blob/master/README.md}{glmmrBase} for a full list):
 * \code{gr(x)}: Indicator function (1 parameter)
 * \code{fexp(x)}: Exponential function (2 parameters)
-* \code{ar1(x)}: AR1 function (1 parameter)
+* \code{ar(x)}: AR function (2 parameters)
 * \code{sqexp(x)}: Squared exponential (1 parameter)
 * \code{matern(x)}: Matern function (2 parameters)
 * \code{bessel(x)}: Modified Bessel function of the 2nd kind (1 parameter)
+For many 2 parameter functions, such as `ar` and `fexp`, alternative one parameter 
+versions are also available as `ar0` and `fexp0`. These function omit the variance 
+parameter and so can be used in combination with `gr` functions such as `gr(j)*ar0(t)`.
 
 Parameters are provided to the covariance function as a vector.
 The parameters in the vector for each function should be provided
 in the order the covariance functions are written are written.
 For example,
-* Formula: `~(1|gr(j))+(1|gr(j*t))`; parameters: `c(0.25,0.1)`
-* Formula: `~(1|gr(j)*fexp(t))`; parameters: `c(0.25,1,0.5)`
-Note that it is also possible to specify a group membership with two
-variable alternatively as `(1|gr(j)*gr(t))`, for example, but this
-will require two parameters to be specified, so it is recommended against.
+* Formula: `~(1|gr(j))+(1|gr(j*t))`; parameters: `c(0.05,0.01)`
+* Formula: `~(1|gr(j)*fexp0(t))`; parameters: `c(0.05,0.5)`
 
-If not all of `formula`, `data`, and `parameters` are not specified then the linked matrices
-are not calculated. These options can be later specified, or updated via a \link[glmmrBase]{Model} object.
-If these arguments are updated or changed then call `self$check()` to update linked matrices. Updating of
-parameters is automatic if using the `update_parameters()` member function.
+Updating of parameters is automatic if using the `update_parameters()` member function.
 
 
 Using `update_parameters()` is the preferred way of updating the parameters of the
@@ -66,18 +63,24 @@ If using direct assignment, call `self$check()` afterwards.
 ## Method `Covariance$new`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(5)*t(5)) > ind(5))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
-                      parameters = c(0.25,0.7),
+cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
+                      parameters = c(0.05,0.7),
                       data= df)
 
 ## ------------------------------------------------
 ## Method `Covariance$check`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(5)*t(5)) > ind(5))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
-                      parameters = c(0.15,0.8),
+cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
+                      parameters = c(0.03,0.8),
                       data= df)
 cov$parameters <- c(0.25,0.1)
 cov$check(verbose=FALSE)
@@ -86,8 +89,11 @@ cov$check(verbose=FALSE)
 ## Method `Covariance$print`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(5)*t(5)) > ind(5))
-Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
+Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
                       parameters = c(0.05,0.8),
                       data= df)
 
@@ -95,8 +101,11 @@ Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
 ## Method `Covariance$subset`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(10)*t(5)) > ind(10))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
+cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
                       parameters = c(0.05,0.8),
                       data= df)
 cov$subset(1:100)
@@ -174,9 +183,12 @@ A Covariance object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(5)*t(5)) > ind(5))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
-                      parameters = c(0.25,0.7),
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(5)*t(5)) > ind(5))
+cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
+                      parameters = c(0.05,0.7),
                       data= df)
 }
 \if{html}{\out{</div>}}
@@ -205,9 +217,12 @@ NULL
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(5)*t(5)) > ind(5))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
-                      parameters = c(0.15,0.8),
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(5)*t(5)) > ind(5))
+cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
+                      parameters = c(0.03,0.8),
                       data= df)
 cov$parameters <- c(0.25,0.1)
 cov$check(verbose=FALSE)
@@ -252,8 +267,11 @@ Show details of Covariance object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(5)*t(5)) > ind(5))
-Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(5)*t(5)) > ind(5))
+Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
                       parameters = c(0.05,0.8),
                       data= df)
 }
@@ -280,8 +298,11 @@ Keep specified indices and removes the rest
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(10)*t(5)) > ind(10))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar1(t)),
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(10)*t(5)) > ind(10))
+cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
                       parameters = c(0.05,0.8),
                       data= df)
 cov$subset(1:100)

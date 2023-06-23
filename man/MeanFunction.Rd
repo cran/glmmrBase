@@ -28,13 +28,10 @@ For example for a stepped-wedge cluster trial model, a typical mean model is
 are fixed effects for each time period. The formula specification for this would be `~ factor(t) + int` 
 where `int` is the name of the variable indicating the treatment.
 
-One can also include non-linear functions of variables in the mean function. These are handled in the analyses 
-by first-order approximation. 
+One can also include non-linear functions of variables in the mean function, and name the parameters. 
+The resulting X matrix is then a matrix of first-order partial derivatives. For example, one can
+specify `~ int + b_1*exp(b_2*x)`.
 
-If not all of `formula`, `data`, and `parameters` are not specified then the linked matrices 
-are not calculated. These options can be later specified, or updated via a \link[glmmrBase]{Model} object.
-If these arguments are updated or changed then call `self$check()` to update linked matrices. Updating of 
-parameters is automatic if using the `update_parameters()` member function.
 
 
 Using `update_parameters()` is the preferred way of updating the parameters of the 
@@ -48,6 +45,9 @@ If using direct assignment, call `self$check()` afterwards.
 ## Method `MeanFunction$n`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 2, 'int'] <- 1
@@ -61,6 +61,9 @@ mf1$n()
 ## Method `MeanFunction$check`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
@@ -75,6 +78,9 @@ mf1$check()
 ## Method `MeanFunction$new`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 2, 'int'] <- 1
@@ -87,6 +93,9 @@ mf1 <- MeanFunction$new(formula = ~ int ,
 ## Method `MeanFunction$colnames`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
@@ -101,6 +110,9 @@ mf1$colnames()
 ## Method `MeanFunction$subset_rows`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
@@ -114,6 +126,9 @@ mf1$subset_rows(1:20)
 ## Method `MeanFunction$subset_cols`
 ## ------------------------------------------------
 
+\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
 df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
@@ -175,7 +190,10 @@ The number of observations in the model
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(4)*t(5)) > ind(5))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 2, 'int'] <- 1
 mf1 <- MeanFunction$new(formula = ~ int ,
@@ -212,7 +230,10 @@ NULL
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(4)*t(5)) > ind(5))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
 mf1 <- MeanFunction$new(formula = ~ int ,
@@ -263,7 +284,10 @@ A MeanFunction object
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(4)*t(5)) > ind(5))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 2, 'int'] <- 1
 mf1 <- MeanFunction$new(formula = ~ int ,
@@ -331,7 +355,10 @@ replace the current column names of the data}
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(4)*t(5)) > ind(5))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
 mf1 <- MeanFunction$new(formula = ~ int ,
@@ -370,7 +397,10 @@ NULL
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(4)*t(5)) > ind(5))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
 mf1 <- MeanFunction$new(formula = ~ int ,
@@ -408,7 +438,10 @@ NULL
 }
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
-\preformatted{df <- nelder(~(cl(4)*t(5)) > ind(5))
+\preformatted{\dontshow{
+setParallel(FALSE) # for the CRAN check
+}
+df <- nelder(~(cl(4)*t(5)) > ind(5))
 df$int <- 0
 df[df$cl <= 5, 'int'] <- 1
 mf1 <- MeanFunction$new(formula = ~ int ,
