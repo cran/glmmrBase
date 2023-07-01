@@ -8,30 +8,12 @@
 #include <RcppEigen.h>
 #include "algo.h"
 #include "general.h"
+#include "family.hpp"
 
 // [[Rcpp::depends(RcppEigen)]]
 
 namespace glmmr {
 namespace maths {
-
-const static inline std::unordered_map<std::string,int> model_to_int{
-  {"poissonlog",1},
-  {"poissonidentity",2},
-  {"bernoullilogit",3},
-  {"bernoullilog",4},
-  {"bernoulliidentity",5},
-  {"bernoulliprobit",6},
-  {"gaussianidentity",7},
-  {"gaussianlog",8},
-  {"gammalog",9},
-  {"gammainverse",10},
-  {"gammaidentity",11},
-  {"betalogit",12},
-  {"binomiallogit",13},
-  {"binomiallog",14},
-  {"binomialidentity",15},
-  {"binomialprobit",16}
-};
 
 inline double gaussian_cdf(double value)
 {
@@ -101,13 +83,12 @@ inline Eigen::VectorXd mod_inv_func(Eigen::VectorXd mu,
 }
 
 inline Eigen::VectorXd dhdmu(const Eigen::VectorXd& xb,
-                             std::string family,
-                             std::string link) {
+                             const glmmr::Family& family) {
   
   Eigen::VectorXd wdiag(xb.size());
   Eigen::ArrayXd p(xb.size());
   
-  switch (glmmr::maths::model_to_int.at(family + link)) {
+  switch (family.flink) {
   case 1:
     wdiag = exp_vec(-1.0 * xb);
     break;
@@ -305,7 +286,7 @@ inline double log_likelihood(double y,
                              double mu,
                              double var_par,
                              int flink) {
-  double logl;
+  double logl = 0;
   
   switch (flink){
   case 1:
@@ -323,28 +304,28 @@ inline double log_likelihood(double y,
   case 3:
     if(y==1){
       logl = log(1/(1+exp(-1.0*mu)));
-    } else if(y==0){
+    } else {
       logl = log(1 - 1/(1+exp(-1.0*mu)));
     }
     break;
   case 4:
     if(y==1){
       logl = mu;
-    } else if(y==0){
+    } else {
       logl = log(1 - exp(mu));
     }
     break;
   case 5:
     if(y==1){
       logl = log(mu);
-    } else if(y==0){
+    } else {
       logl = log(1 - mu);
     }
     break;
   case 6:
     if(y==1){
       logl = (double)R::pnorm(mu,0,1,true,true);
-    } else if(y==0){
+    } else {
       logl = log(1 - (double)R::pnorm(mu,0,1,true,false));
     }
     break;

@@ -101,8 +101,24 @@ Linpred__any_nonlinear <- function(xp) {
     .Call(`_glmmrBase_Linpred__any_nonlinear`, xp)
 }
 
-Model__new <- function(y_, formula_, data_, colnames_, family_, link_) {
-    .Call(`_glmmrBase_Model__new`, y_, formula_, data_, colnames_, family_, link_)
+ModelBits__new <- function(formula_, data_, colnames_, family_, link_, beta_, theta_) {
+    .Call(`_glmmrBase_ModelBits__new`, formula_, data_, colnames_, family_, link_, beta_, theta_)
+}
+
+ModelBits__update_beta <- function(xp, beta_) {
+    invisible(.Call(`_glmmrBase_ModelBits__update_beta`, xp, beta_))
+}
+
+ModelBits__update_theta <- function(xp, theta_) {
+    invisible(.Call(`_glmmrBase_ModelBits__update_theta`, xp, theta_))
+}
+
+Model__new_from_bits <- function(bptr_) {
+    .Call(`_glmmrBase_Model__new_from_bits`, bptr_)
+}
+
+Model__set_y <- function(xp, y_) {
+    invisible(.Call(`_glmmrBase_Model__set_y`, xp, y_))
 }
 
 Model__set_offset <- function(xp, offset_) {
@@ -336,17 +352,14 @@ Model__predict <- function(xp, newdata_, newoffset_, m) {
 #' execution can be disabled with this function.
 #' 
 #' @param parallel_ Logical indicating whether to use parallel computation (TRUE) or disable it (FALSE)
+#' @param cores_ Number of cores for parallel execution
 #' @return None, called for effects
-setParallel <- function(parallel_) {
-    invisible(.Call(`_glmmrBase_setParallel`, parallel_))
+setParallel <- function(parallel_, cores_ = 2L) {
+    invisible(.Call(`_glmmrBase_setParallel`, parallel_, cores_))
 }
 
 re_names <- function(formula) {
     .Call(`_glmmrBase_re_names`, formula)
-}
-
-gen_sigma_approx <- function(xb, Z, D, family, link, var_par, attenuate) {
-    .Call(`_glmmrBase_gen_sigma_approx`, xb, Z, D, family, link, var_par, attenuate)
 }
 
 attenuate_xb <- function(xb, Z, D, link) {
