@@ -17,7 +17,6 @@
 #include <stack>
 #include <SparseChol.h>
 #include <set>
-#include "algo.h"
 #include <boost/math/special_functions/bessel.hpp>
 #include <boost/math/special_functions/polygamma.hpp>
 #include <boost/math/special_functions/gamma.hpp>
@@ -161,11 +160,32 @@ struct matrix_matrix{
 public:
   MatrixXd mat1;
   MatrixXd mat2;
+  double a = 0;
+  double b = 0;
   matrix_matrix(int n1, int m1, int n2, int m2): mat1(n1,m1), mat2(n2,m2) {};
   matrix_matrix(const matrix_matrix& x) : mat1(x.mat1), mat2(x.mat2) {};
   matrix_matrix& operator=(matrix_matrix x){
     mat1 = x.mat1;
     mat2 = x.mat2;
+    a = x.a;
+    b = x.b;
+    return *this;
+  };
+};
+
+struct kenward_data{
+public:
+  MatrixXd vcov_beta;
+  MatrixXd vcov_theta;
+  VectorXd dof;
+  VectorXd lambda;
+  kenward_data(int n1, int m1, int n2, int m2): vcov_beta(n1,m1), vcov_theta(n2,m2), dof(n1), lambda(n1) {};
+  kenward_data(const kenward_data& x) : vcov_beta(x.vcov_beta), vcov_theta(x.vcov_theta), dof(x.dof), lambda(x.lambda) {};
+  kenward_data& operator=(kenward_data x){
+    vcov_beta = x.vcov_beta;
+    vcov_theta = x.vcov_theta;
+    dof = x.dof;
+    lambda = x.lambda;
     return *this;
   };
 };

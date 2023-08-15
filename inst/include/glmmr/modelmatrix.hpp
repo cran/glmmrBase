@@ -7,6 +7,7 @@
 #include "randomeffects.hpp"
 #include "openmpheader.h"
 #include "maths.h"
+#include "matrixfield.h"
 
 namespace glmmr {
 
@@ -24,7 +25,7 @@ class ModelMatrix{
     MatrixXd sandwich_matrix();
     std::vector<MatrixXd> sigma_derivatives();
     MatrixXd information_matrix_theta();
-    matrix_matrix kenward_roger();
+    kenward_data kenward_roger();
     MatrixXd linpred();
     vector_matrix b_score();
     vector_matrix re_score();
@@ -215,80 +216,187 @@ inline std::vector<MatrixXd> glmmr::ModelMatrix::sigma_derivatives(){
 
 inline MatrixXd glmmr::ModelMatrix::information_matrix_theta(){
   if(model.family.family=="gamma" || model.family.family=="beta")Rcpp::stop("Not currently supported for gamma or beta families");
-  int R = model.covariance.npar();
-  int Rmod = model.family.family=="gaussian" ? R+1 : R;
-  MatrixXd M_theta = MatrixXd::Zero(Rmod,Rmod);
-  std::vector<MatrixXd> A_matrix;
-  MatrixXd SigmaInv = Sigma(true);
-  MatrixXd Z = model.covariance.Z();
+  int n = model.n();
   std::vector<MatrixXd> derivs;
   model.covariance.derivatives(derivs,1);
-  for(int i = 0; i < R; i++){
-    A_matrix.push_back(SigmaInv*Z*derivs[1+i]*Z.transpose());
-  }
-  if(model.family.family=="gaussian"){
-    A_matrix.push_back(2*model.data.variance.matrix().asDiagonal()*SigmaInv);
-  }
+  int R = model.covariance.npar();
+  int Rmod = model.family.family=="gaussian" ? R+1 : R;
+  MatrixXd M = information_matrix();
+  M = M.llt().solve(MatrixXd::Identity(M.rows(),M.cols()));
+  MatrixXd SigmaInv = Sigma(true);
+  MatrixXd Z = model.covariance.Z();
+  MatrixXd X = model.linear_predictor.X();
+  MatrixXd SigX = SigmaInv*X;
+  MatrixXd M_theta = MatrixXd::Zero(Rmod,Rmod);
+  MatrixXd partial1(model.n(),model.n());
+  MatrixXd partial2(model.n(),model.n());
+  glmmr::MatrixField<MatrixXd> S;
+  glmmr::MatrixField<MatrixXd> P;
+  glmmr::MatrixField<MatrixXd> Q;
+  int counter = 0;
   for(int i = 0; i < Rmod; i++){
+    if(i < R){
+      partial1 = Z*derivs[1+i]*Z.transpose();
+    } else {
+      partial1 = MatrixXd::Identity(n,n);
+      if((model.data.weights != 1).any())partial1 = model.data.weights.inverse().matrix().asDiagonal();
+    }
+    P.add(-1*SigX.transpose()*partial1*SigX);
     for(int j = i; j < Rmod; j++){
-      M_theta(i,j) = 0.5 * (A_matrix[i]*A_matrix[j]).trace();
-      if(i!=j)M_theta(j,i)=M_theta(i,j);
+      if(j < R){
+        partial2 = Z*derivs[1+j]*Z.transpose();
+      } else {
+        partial2 = MatrixXd::Identity(n,n);
+        if((model.data.weights != 1).any())partial2 = model.data.weights.inverse().matrix().asDiagonal();
+      }
+      Q.add(X.transpose()*SigmaInv*partial1*SigmaInv*partial2*SigX);
+      S.add(SigmaInv*partial1*SigmaInv*partial2);
     }
   }
+  counter = 0;
+  for(int i = 0; i < Rmod; i++){
+    for(int j = i; j < Rmod; j++){
+      M_theta(i,j) = 0.5*(S(counter).trace())- (M*Q(counter)).trace() + 0.5*((M*P(i)*M*P(j)).trace());
+      if(i!=j)M_theta(j,i)=M_theta(i,j);
+      counter++;
+    }
+  }
+  M_theta = M_theta.llt().solve(MatrixXd::Identity(Rmod,Rmod));
   return M_theta;
 }
 
-inline matrix_matrix glmmr::ModelMatrix::kenward_roger(){
+inline kenward_data glmmr::ModelMatrix::kenward_roger(){
   if(model.family.family=="gamma" || model.family.family=="beta")Rcpp::stop("Not currently supported for gamma or beta families");
-  int R = model.covariance.npar();
-  int Rmod = model.family.family=="gaussian" ? R+1 : R;
-  MatrixXd M_theta = MatrixXd::Zero(Rmod,Rmod);
-  std::vector<MatrixXd> A_matrix;
-  MatrixXd SigmaInv = Sigma(true);
-  MatrixXd Z = model.covariance.Z();
-  MatrixXd M = information_matrix();
-  M = M.llt().solve(MatrixXd::Identity(model.linear_predictor.P(),model.linear_predictor.P()));
-  MatrixXd X = model.linear_predictor.X();
-  MatrixXd SigX = SigmaInv*X;
-  MatrixXd middle = MatrixXd::Identity(model.n(),model.n()) - X*M*SigX.transpose();
-  
+  int n = model.n();
   std::vector<MatrixXd> derivs;
   model.covariance.derivatives(derivs,2);
-  for(int i = 0; i < R; i++){
-    A_matrix.push_back(Z*derivs[1+i]*Z.transpose());
+  int R = model.covariance.npar();
+  int Rmod = model.family.family=="gaussian" ? R+1 : R;
+  
+  MatrixXd M = information_matrix();
+  M = M.llt().solve(MatrixXd::Identity(M.rows(),M.cols()));
+  MatrixXd M_new(M);
+  MatrixXd SigmaInv = Sigma(true);
+  MatrixXd Z = model.covariance.Z();
+  MatrixXd X = model.linear_predictor.X();
+  MatrixXd SigX = SigmaInv*X;
+  MatrixXd M_theta = MatrixXd::Zero(Rmod,Rmod);
+  MatrixXd partial1(model.n(),model.n());
+  MatrixXd partial2(model.n(),model.n());
+  MatrixXd meat = MatrixXd::Zero(SigX.cols(),SigX.cols());
+  glmmr::MatrixField<MatrixXd> P;
+  glmmr::MatrixField<MatrixXd> Q;
+  glmmr::MatrixField<MatrixXd> RR;
+  glmmr::MatrixField<MatrixXd> S;
+  int counter = 0;
+  for(int i = 0; i < Rmod; i++){
+    if(i < R){
+      partial1 = Z*derivs[1+i]*Z.transpose();
+    } else {
+      partial1 = MatrixXd::Identity(n,n);
+      if((model.data.weights != 1).any())partial1 = model.data.weights.inverse().matrix().asDiagonal();
+    }
+    P.add(-1*SigX.transpose()*partial1*SigX);
+    for(int j = i; j < Rmod; j++){
+      if(j < R){
+        partial2 = Z*derivs[1+j]*Z.transpose();
+      } else {
+        partial2 = MatrixXd::Identity(n,n);
+        if((model.data.weights != 1).any())partial2 = model.data.weights.inverse().matrix().asDiagonal();
+      }
+      S.add(SigmaInv*partial1*SigmaInv*partial2);
+      Q.add(X.transpose()*SigmaInv*partial1*SigmaInv*partial2*SigX);
+      if(i < R && j < R){
+        int scnd_idx = i + j*(R-1) - j*(j-1)/2;
+        RR.add(SigX.transpose()*Z*derivs[R+1+scnd_idx]*Z.transpose()*SigX);
+      }
+    }
   }
-  if(model.family.family=="gaussian"){
-    A_matrix.push_back(2*model.data.variance.matrix().asDiagonal()*MatrixXd::Identity(model.n(),model.n()));
-  }
-  //possible parallelisation?
+  counter = 0;
   for(int i = 0; i < Rmod; i++){
     for(int j = i; j < Rmod; j++){
-      M_theta(i,j) = (SigmaInv*A_matrix[i]*SigmaInv*A_matrix[j]).trace();
-      M_theta(i,j) -= (M*SigX.transpose()*A_matrix[i]*SigmaInv*(middle+MatrixXd::Identity(model.n(),model.n()))*A_matrix[j]*SigX).trace();
-      M_theta(i,j) *= 0.5;
+      M_theta(i,j) = 0.5*(S(counter).trace()) - (M*Q(counter)).trace() + 0.5*((M*P(i)*M*P(j)).trace());
       if(i!=j)M_theta(j,i)=M_theta(i,j);
+      counter++;
     }
   }
-  
   M_theta = M_theta.llt().solve(MatrixXd::Identity(Rmod,Rmod));
-  MatrixXd meat = MatrixXd::Zero(model.linear_predictor.P(),model.linear_predictor.P());
-  for(int i = 0; i < Rmod; i++){
-    for(int j = 0; j < Rmod; j++){
-      int scnd_idx = i <= j ? i + j*(R-1) - j*(j-1)/2 : j + i*(R-1) - i*(i-1)/2;
-      meat += M_theta(i,j)*SigX.transpose()*A_matrix[i]*SigmaInv*middle*A_matrix[j]*SigX;
-      if(i < R && j < R){
-        meat -= M_theta(i,j)*0.25*SigX.transpose()*Z*derivs[R+1+scnd_idx]*Z.transpose()*SigX;
+  for(int i = 0; i < (Rmod-1); i++){
+    if(i < R){
+      partial1 = Z*derivs[1+i]*Z.transpose();
+    } else {
+      partial1 = MatrixXd::Identity(n,n);
+      if((model.data.weights != 1).any())partial1 = model.data.weights.inverse().matrix().asDiagonal();
+    }
+    for(int j = (i+1); j < Rmod; j++){
+      if(j < R){
+        partial2 = Z*derivs[1+j]*Z.transpose();
+      } else {
+        partial2 = MatrixXd::Identity(n,n);
       }
-      if(i==R && j==R){
-        meat -= M_theta(i,j)*0.5*SigX.transpose()*SigX;
+      int scnd_idx = i + j*(Rmod-1) - j*(j-1)/2;
+      meat += M_theta(i,j)*(Q(scnd_idx) + Q(scnd_idx).transpose() - P(i)*M*P(j) -P(j)*M*P(i));//(SigX.transpose()*partial1*PG*partial2*SigX);//
+      if(i < R && j < R){
+        scnd_idx = i + j*(R-1) - j*(j-1)/2;
+        meat -= 0.5*M_theta(i,j)*(RR(scnd_idx));
       }
     }
   }
+  for(int i = 0; i < Rmod; i++){
+    if(i < R){
+      partial1 = Z*derivs[1+i]*Z.transpose();
+    } else {
+      partial1 = MatrixXd::Identity(n,n);
+      if((model.data.weights != 1).any())partial1 = model.data.weights.inverse().matrix().asDiagonal();
+    }
+    int scnd_idx = i + i*(Rmod-1) - i*(i-1)/2;
+    meat += M_theta(i,i)*(Q(scnd_idx) - P(i)*M*P(i));
+    if(i < R){
+      scnd_idx = i + i*(R-1) - i*(i-1)/2;
+      meat -= 0.25*M_theta(i,i)*RR(scnd_idx);
+    }
+  }
+  M_new = M + 2*M*meat*M;
   
-  M += 2*M*meat*M;
-  matrix_matrix out(model.linear_predictor.P(),model.linear_predictor.P(),Rmod,Rmod);
-  out.mat1 = M;
-  out.mat2 = M_theta;
+  // degrees of freedom correction
+  
+  kenward_data out(model.linear_predictor.P(),model.linear_predictor.P(),Rmod,Rmod);
+  out.vcov_beta = M_new;
+  out.vcov_theta = M_theta;
+  
+  double a1, a2, B, g, c1, c2, c3, v0, v1, v2, rhotop, rho;
+  int mult = 1;
+  VectorXd L = VectorXd::Zero(model.linear_predictor.P());
+  MatrixXd Theta(model.linear_predictor.P(),model.linear_predictor.P());
+  for(int p = 0; p < L.size(); p++){
+    L.setZero();
+    L(p) = 1;
+    double vlb = L.transpose() * M * L;
+    Theta = (1/vlb)*(L*L.transpose());
+    Theta = Theta*M;
+    a1 = 0; 
+    a2 = 0;
+    for(int i = 0; i < Rmod; i++){
+      for(int j = i; j < Rmod; j++){
+        mult = i==j ? 1 : 2;
+        a1 += mult*M_theta(i,j)*(Theta*P(i)*M).trace()*(Theta*P(j)*M).trace();
+        a2 += mult*M_theta(i,j)*(Theta*P(i)*M*Theta*P(j)*M).trace();
+      }
+    }
+    B = (a1 + 6*a2)*0.5;
+    g = (2*a1 - 5*a2)/(3*a2);
+    c1 = g/(3+2*(1-g));
+    c2 = (1-g)/(3+2*(1-g));
+    c3 = (3-g)/(3+2*(1-g));
+    v0 = abs(1 + c1*B) < 1e-10 ? 0 : 1 + c1*B;
+    v1 = 1 - c2*B;
+    v2 = 1/(1 - c3*B);
+    rhotop = abs(1-a2) < 1e-10 && abs(v1) < 1e-10 ? 1.0 : (1-a2)/v1;
+    rho = rhotop*rhotop*v0*v2;
+    out.dof(p) = 4 + 3/(rho-1);
+    out.lambda(p) = (1-a2)*out.dof(p)/(out.dof(p) - 2);
+  }
+  
   return out;
 }
 
