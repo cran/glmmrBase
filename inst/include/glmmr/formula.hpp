@@ -1,5 +1,4 @@
-#ifndef FORMULA_HPP
-#define FORMULA_HPP
+#pragma once
 
 #include "general.h"
 #include "interpreter.h"
@@ -88,7 +87,7 @@ inline void glmmr::Formula::tokenise(){
     cursor++;
   }
   if(linear_predictor_.back()=='+')linear_predictor_.pop_back();
-  for(unsigned int i =0; i<re_.size(); i++){
+  for(int i =0; i<re_.size(); i++){
     re_order_.push_back(i);
   }
   re_terms_ = re_;
@@ -136,5 +135,3 @@ inline strvec glmmr::Formula::z(){
 inline strvec glmmr::Formula::re_terms(){
   return re_terms_;
 }
-
-#endif

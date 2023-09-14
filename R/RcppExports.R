@@ -113,8 +113,20 @@ ModelBits__update_theta <- function(xp, theta_) {
     invisible(.Call(`_glmmrBase_ModelBits__update_theta`, xp, theta_))
 }
 
-Model__new_from_bits <- function(bptr_) {
-    .Call(`_glmmrBase_Model__new_from_bits`, bptr_)
+Model__new_w_pars <- function(formula_, data_, colnames_, family_, link_, beta_, theta_) {
+    .Call(`_glmmrBase_Model__new_w_pars`, formula_, data_, colnames_, family_, link_, beta_, theta_)
+}
+
+Model__new <- function(formula_, data_, colnames_, family_, link_) {
+    .Call(`_glmmrBase_Model__new`, formula_, data_, colnames_, family_, link_)
+}
+
+Covariance__get_ptr_model <- function(xp) {
+    .Call(`_glmmrBase_Covariance__get_ptr_model`, xp)
+}
+
+LinearPredictor__get_ptr_model <- function(xp) {
+    .Call(`_glmmrBase_LinearPredictor__get_ptr_model`, xp)
 }
 
 Model__set_y <- function(xp, y_) {
@@ -127,6 +139,18 @@ Model__set_offset <- function(xp, offset_) {
 
 Model__set_weights <- function(xp, weights_) {
     invisible(.Call(`_glmmrBase_Model__set_weights`, xp, weights_))
+}
+
+Model__P <- function(xp) {
+    .Call(`_glmmrBase_Model__P`, xp)
+}
+
+Model__Q <- function(xp) {
+    .Call(`_glmmrBase_Model__Q`, xp)
+}
+
+Model__theta_size <- function(xp) {
+    .Call(`_glmmrBase_Model__theta_size`, xp)
 }
 
 Model__update_beta <- function(xp, beta_) {
@@ -219,14 +243,6 @@ Model__u <- function(xp, scaled_) {
 
 Model__Zu <- function(xp) {
     .Call(`_glmmrBase_Model__Zu`, xp)
-}
-
-Model__P <- function(xp) {
-    .Call(`_glmmrBase_Model__P`, xp)
-}
-
-Model__Q <- function(xp) {
-    .Call(`_glmmrBase_Model__Q`, xp)
 }
 
 Model__X <- function(xp) {

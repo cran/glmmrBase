@@ -1,5 +1,4 @@
-#ifndef MATRIXW_HPP
-#define MATRIXW_HPP
+#pragma once
 
 #include "general.h"
 #include "modelbits.hpp"
@@ -10,23 +9,26 @@ namespace glmmr {
 
 using namespace Eigen;
 
+template<typename modeltype>
 class MatrixW{
 public:
   bool attenuated = false;
   VectorXd W_ = VectorXd::Constant(1,1.0);
-  glmmr::ModelBits& model;
-  MatrixW(glmmr::ModelBits& model_): model(model_) { update(); };
+  modeltype& model;
+  MatrixW(modeltype& model_): model(model_) { update(); };
   VectorXd W();
   void update();
 };
 
 }
 
-inline VectorXd glmmr::MatrixW::W(){
+template<typename modeltype>
+inline VectorXd glmmr::MatrixW<modeltype>::W(){
   return W_;
 }
 
-inline void glmmr::MatrixW::update(){
+template<typename modeltype>
+inline void glmmr::MatrixW<modeltype>::update(){
   if(W_.size() != model.n())W_.conservativeResize(model.n());
   ArrayXd nvar_par(model.n());
   ArrayXd xb(model.n());
@@ -51,5 +53,3 @@ inline void glmmr::MatrixW::update(){
   W_ = (W_.array()*nvar_par).matrix();
   W_ = ((W_.array().inverse()) * model.data.weights).matrix();
 }
-
-#endif

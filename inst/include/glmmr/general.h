@@ -1,5 +1,4 @@
-#ifndef GENERAL_H
-#define GENERAL_H
+#pragma once
 
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS 
 #define _USE_MATH_DEFINES
@@ -60,7 +59,8 @@ const static std::unordered_map<str, double> nvars = {
   {"prodcb",2},
   {"prodek",2},
   {"ar0", 1},
-  {"ar1", 1}
+  {"ar1", 1},
+  {"dist",1}
 };
 
 const static std::unordered_map<str,int> string_to_case{
@@ -79,7 +79,8 @@ const static std::unordered_map<str,int> string_to_case{
   {"prodcb",13},
   {"prodek",14},
   {"ar0",15},
-  {"ar1",16}
+  {"ar1",16},
+  {"dist",17}
 };
 
 inline bool validate_fn(const str& fn){
@@ -189,5 +190,3 @@ public:
     return *this;
   };
 };
-
-#endif

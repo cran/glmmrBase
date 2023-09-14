@@ -1,5 +1,4 @@
-#ifndef FORMULAPARSE_H
-#define FORMULAPARSE_H
+#pragma once
 
 #include "general.h"
 
@@ -11,7 +10,7 @@ inline bool parse_formula(std::vector<char>& formula,
                           const strvec& colnames,
                           MatrixXd& Xdata){
   
-  if(data.rows() != Xdata.rows())Rcpp::stop("Mismatched size of data and Xdata");
+  //if(data.rows() != Xdata.rows())Rcpp::stop("Mismatched size of data and Xdata");
   bool added_a_parameter = false;
   bool s1_check, s2_check;
   int bracket_count = 0;
@@ -275,6 +274,3 @@ inline bool parse_formula(std::vector<char>& formula,
 
 }
 
-
-
-#endif

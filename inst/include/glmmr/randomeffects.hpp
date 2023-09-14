@@ -1,5 +1,4 @@
-#ifndef RANDOMEFFECTS_HPP
-#define RANDOMEFFECTS_HPP
+#pragma once
 
 #include "general.h"
 #include "covariance.hpp"
@@ -12,16 +11,26 @@ namespace glmmr {
 
 using namespace Eigen;
 
+template<typename modeltype>
 class RandomEffects{
 public:
   sparse ZL;
   MatrixXd u_;
   MatrixXd zu_;
-  glmmr::ModelBits& model;
-  RandomEffects(glmmr::ModelBits& model_) : 
+  modeltype& model;
+  
+  RandomEffects(modeltype& model_) : 
     ZL(model_.n(),model_.covariance.Q()),
     u_(MatrixXd::Zero(model_.covariance.Q(),1)),
     zu_(model_.n(),1), model(model_) { if(model.covariance.parameters_.size()>0)ZL = model.covariance.ZL_sparse();};
+  
+  RandomEffects(modeltype& model_, int n, int Q) : 
+    ZL(n, Q),
+    u_(MatrixXd::Zero(Q,1)),
+    zu_(n,1), model(model_) { if(model.covariance.parameters_.size()>0)ZL = model.covariance.ZL_sparse();};
+  
+  RandomEffects(const glmmr::RandomEffects<modeltype>& re) : ZL(re.ZL), u_(re.u_), zu_(re.zu_), model(re.model) {};
+  
   MatrixXd Zu(){return zu_;};
   MatrixXd u(bool scaled = true);
   vector_matrix predict_re(const ArrayXXd& newdata_,const ArrayXd& newoffset_);
@@ -29,7 +38,8 @@ public:
 
 }
 
-inline MatrixXd glmmr::RandomEffects::u(bool scaled){
+template<typename modeltype>
+inline MatrixXd glmmr::RandomEffects<modeltype>::u(bool scaled){
   if(scaled){
     return model.covariance.Lu(u_);
   } else {
@@ -37,7 +47,8 @@ inline MatrixXd glmmr::RandomEffects::u(bool scaled){
   }
 }
 
-inline vector_matrix glmmr::RandomEffects::predict_re(const ArrayXXd& newdata_,
+template<typename modeltype>
+inline vector_matrix glmmr::RandomEffects<modeltype>::predict_re(const ArrayXXd& newdata_,
                                                       const ArrayXd& newoffset_){
   if(model.covariance.data_.cols()!=newdata_.cols())Rcpp::stop("Different numbers of columns in new data");
   // generate the merged data
@@ -77,5 +88,3 @@ inline vector_matrix glmmr::RandomEffects::predict_re(const ArrayXXd& newdata_,
   result.mat -= D12 * D22 * D12.transpose();
   return result;
 }
-
-#endif

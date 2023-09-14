@@ -1,5 +1,4 @@
-#ifndef COVARIANCE_HPP
-#define COVARIANCE_HPP
+#pragma once
 
 #define _USE_MATH_DEFINES
 
@@ -28,8 +27,8 @@ public:
     form_(formula), data_(data), colnames_(colnames), Q_(0),
     size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
     zquad(max_block_dim()) { 
-    Z_constructor();
-  };
+      Z_constructor();
+    };
   
   Covariance(const glmmr::Formula& form,
              const ArrayXXd &data,
@@ -37,8 +36,8 @@ public:
     form_(form), data_(data), colnames_(colnames), Q_(0),
     size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
     zquad(max_block_dim()) {
-    Z_constructor();
-  };
+      Z_constructor();
+    };
   
   Covariance(const str& formula,
              const ArrayXXd &data,
@@ -47,9 +46,9 @@ public:
     form_(formula), data_(data), colnames_(colnames), parameters_(parameters),
     Q_(0),size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
     zquad(max_block_dim()), spchol((make_sparse(),mat)) {
-    L_constructor();
-    Z_constructor();
-  };
+      L_constructor();
+      Z_constructor();
+    };
   
   Covariance(const glmmr::Formula& form,
              const ArrayXXd &data,
@@ -58,9 +57,9 @@ public:
     form_(form), data_(data), colnames_(colnames), parameters_(parameters),
     Q_(0),size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
     zquad(max_block_dim()), spchol((make_sparse(),mat)) {
-    L_constructor();
-    Z_constructor();
-  };
+      L_constructor();
+      Z_constructor();
+    };
   
   Covariance(const str& formula,
              const ArrayXXd &data,
@@ -70,9 +69,9 @@ public:
     parameters_(parameters.data(),parameters.data()+parameters.size()),Q_(0), 
     size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
     zquad(max_block_dim()), spchol((make_sparse(),mat)) {
-    L_constructor();
-    Z_constructor();
-  };
+      L_constructor();
+      Z_constructor();
+    };
   
   Covariance(const glmmr::Formula& form,
              const ArrayXXd &data,
@@ -82,40 +81,49 @@ public:
     parameters_(parameters.data(),parameters.data()+parameters.size()),Q_(0), 
     size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
     zquad(max_block_dim()), spchol((make_sparse(),mat)) {
-    L_constructor();
-    Z_constructor();
-  };
+      L_constructor();
+      Z_constructor();
+    };
   
-  void update_parameters(const dblvec& parameters);
-  void update_parameters_extern(const dblvec& parameters);
-  void update_parameters(const ArrayXd& parameters);
-  void parse();
-  double get_val(int b, int i, int j);
-  MatrixXd Z();
-  MatrixXd D(bool chol = false, bool upper = false);
-  VectorXd sim_re();
-  double log_likelihood(const VectorXd &u);
-  double log_determinant();
-  int npar();
-  int B();
-  int Q();
-  int max_block_dim();
-  int block_dim(int b);
-  void make_sparse();
-  MatrixXd ZL();
-  MatrixXd LZWZL(const VectorXd& w);
-  MatrixXd ZLu(const MatrixXd& u);
-  MatrixXd Lu(const MatrixXd& u);
-  void set_sparse(bool sparse);
+  Covariance(const glmmr::Covariance& cov) : form_(cov.form_), data_(cov.data_),
+    colnames_(cov.colnames_),
+    parameters_(cov.parameters_), Q_(cov.Q_), 
+    size_B_array((parse(),B_)), dmat_matrix(max_block_dim(),max_block_dim()),
+    zquad(max_block_dim()), spchol((make_sparse(),mat)) {
+      L_constructor();
+      Z_constructor();
+    };
+  
+  virtual void update_parameters(const dblvec& parameters);
+  virtual void update_parameters_extern(const dblvec& parameters);
+  virtual void update_parameters(const ArrayXd& parameters);
+  virtual void parse();
+  virtual double get_val(int b, int i, int j);
+  virtual MatrixXd Z();
+  virtual MatrixXd D(bool chol = false, bool upper = false);
+  virtual VectorXd sim_re();
+  virtual double log_likelihood(const VectorXd &u);
+  virtual double log_determinant();
+  virtual int npar();
+  virtual int B();
+  virtual int Q();
+  virtual int max_block_dim();
+  virtual int block_dim(int b);
+  virtual void make_sparse();
+  virtual MatrixXd ZL();
+  virtual MatrixXd LZWZL(const VectorXd& w);
+  virtual MatrixXd ZLu(const MatrixXd& u);
+  virtual MatrixXd Lu(const MatrixXd& u);
+  virtual void set_sparse(bool sparse);
   bool any_group_re();
   intvec parameter_fn_index();
-  intvec re_count();
-  sparse ZL_sparse();
-  sparse Z_sparse();
+  virtual intvec re_count();
+  virtual sparse ZL_sparse();
+  virtual sparse Z_sparse();
   strvec parameter_names();
-  void derivatives(std::vector<MatrixXd>& derivs,int order = 1);
+  virtual void derivatives(std::vector<MatrixXd>& derivs,int order = 1);
   
-private:
+protected:
   std::vector<glmmr::calculator> calc_;
   intvec z_;
   intvec3d re_pars_;
@@ -898,6 +906,3 @@ inline void glmmr::Covariance::derivatives(std::vector<MatrixXd>& derivs,
   }
 }
 
-
-
-#endif

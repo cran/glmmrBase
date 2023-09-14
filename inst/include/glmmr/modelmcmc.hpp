@@ -1,5 +1,4 @@
-#ifndef MODELMCMC_HPP
-#define MODELMCMC_HPP
+#pragma once
 
 #include "general.h"
 #include "modelbits.hpp"
@@ -12,17 +11,18 @@ namespace glmmr {
 
 using namespace Eigen;
 
+template<typename modeltype>
 class ModelMCMC{
 public:
-  glmmr::ModelBits& model;
-  glmmr::ModelMatrix& matrix;
-  glmmr::RandomEffects& re;
+  modeltype& model;
+  glmmr::ModelMatrix<modeltype>& matrix;
+  glmmr::RandomEffects<modeltype>& re;
   bool verbose = true;
   int trace = 1;
   
-  ModelMCMC(glmmr::ModelBits& model_, 
-             glmmr::ModelMatrix& matrix_,
-               glmmr::RandomEffects& re_) : 
+  ModelMCMC(modeltype& model_, 
+             glmmr::ModelMatrix<modeltype>& matrix_,
+               glmmr::RandomEffects<modeltype>& re_) : 
     model(model_), 
     matrix(matrix_), 
     re(re_),
@@ -38,7 +38,7 @@ public:
   void mcmc_set_refresh(int refresh);
   void mcmc_set_target_accept(double target);
   
-private:
+protected:
   VectorXd u0;
   VectorXd up;
   VectorXd r;
@@ -59,7 +59,8 @@ private:
 
 }
 
-inline double glmmr::ModelMCMC::log_prob(const VectorXd &v){
+template<typename modeltype>
+inline double glmmr::ModelMCMC<modeltype>::log_prob(const VectorXd &v){
   VectorXd zu = re.ZL * v;
   VectorXd mu = model.xb().matrix() + zu;
   double lp1 = 0;
@@ -90,7 +91,8 @@ inline double glmmr::ModelMCMC::log_prob(const VectorXd &v){
   return lp1+lp2-0.5*v.size()*log(2*M_PI);
 }
 
-inline VectorXd glmmr::ModelMCMC::new_proposal(const VectorXd& u0_,
+template<typename modeltype>
+inline VectorXd glmmr::ModelMCMC<modeltype>::new_proposal(const VectorXd& u0_,
                                               bool adapt_, 
                                               int iter_,
                                               double runif_){
@@ -145,7 +147,8 @@ inline VectorXd glmmr::ModelMCMC::new_proposal(const VectorXd& u0_,
   }
 }
 
-inline void glmmr::ModelMCMC::sample(int warmup_,
+template<typename modeltype>
+inline void glmmr::ModelMCMC<modeltype>::sample(int warmup_,
                                  int nsamp_,
                                  int adapt_){
   Rcpp::NumericVector z = Rcpp::rnorm(model.covariance.Q());
@@ -182,7 +185,8 @@ inline void glmmr::ModelMCMC::sample(int warmup_,
   if(verbose)Rcpp::Rcout << "\n" << std::string(40, '-');
 }
 
-inline void glmmr::ModelMCMC::mcmc_sample(int warmup_,
+template<typename modeltype>
+inline void glmmr::ModelMCMC<modeltype>::mcmc_sample(int warmup_,
                                           int samples_,
                                           int adapt_){
   if(re.u_.cols()!=samples_)re.u_.conservativeResize(NoChange,samples_);
@@ -192,20 +196,22 @@ inline void glmmr::ModelMCMC::mcmc_sample(int warmup_,
   re.zu_ = re.ZL*re.u_;
 }
 
-inline void glmmr::ModelMCMC::mcmc_set_lambda(double lambda_){
+template<typename modeltype>
+inline void glmmr::ModelMCMC<modeltype>::mcmc_set_lambda(double lambda_){
   lambda = lambda_;
 }
 
-inline void glmmr::ModelMCMC::mcmc_set_max_steps(int max_steps_){
+template<typename modeltype>
+inline void glmmr::ModelMCMC<modeltype>::mcmc_set_max_steps(int max_steps_){
   max_steps = max_steps_;
 }
 
-inline void glmmr::ModelMCMC::mcmc_set_refresh(int refresh_){
+template<typename modeltype>
+inline void glmmr::ModelMCMC<modeltype>::mcmc_set_refresh(int refresh_){
   refresh = refresh_;
 }
 
-inline void glmmr::ModelMCMC::mcmc_set_target_accept(double target_){
+template<typename modeltype>
+inline void glmmr::ModelMCMC<modeltype>::mcmc_set_target_accept(double target_){
   target_accept = target_;
 }
-
-#endif
