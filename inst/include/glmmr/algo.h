@@ -17,26 +17,6 @@ inline double inner_sum(double* li, double* lj, int n)
   return s;
 }
 
-inline int get_flink(const std::string &family,
-                     const std::string &link){
-  const static std::unordered_map<std::string, int> string_to_case{
-    {"poissonlog",1},
-    {"poissonidentity",2},
-    {"binomiallogit",3},
-    {"binomiallog",4},
-    {"binomialidentity",5},
-    {"binomialprobit",6},
-    {"gaussianidentity",7},
-    {"gaussianlog",8},
-    {"Gammalog",9},
-    {"Gammainverse",10},
-    {"Gammaidentity",11},
-    {"betalogit",12}
-  };
-
-  return string_to_case.at(family + link);
-}
-
 inline Eigen::VectorXd forward_sub(const Eigen::MatrixXd& U,
                                    const Eigen::VectorXd& u,
                                    const int& n)
@@ -51,6 +31,30 @@ inline Eigen::VectorXd forward_sub(const Eigen::MatrixXd& U,
   }
   return y;
 }
+
+template<typename T>
+inline void combinations(const std::vector<std::vector<T> >& vecs, 
+                         unsigned int n,
+                         unsigned int m,
+                         std::vector<T>& buffer,
+                         std::vector<std::vector<T> >& result){
+  buffer[n] = vecs[n][m];
+  if(n == vecs.size()-1){
+    result.push_back(buffer);
+  } else {
+    for(unsigned int i = 0; i < vecs[n+1].size(); i++){
+      combinations(vecs,n+1,i,buffer,result);
+    }
+  }
+}
+
+template<typename T>
+inline T prod_vec(std::vector<T> vec){
+  T result = 1;
+  for(const auto& val: vec)result *= val;
+  return result;
+}
+
 }
 
 namespace Eigen_ext {
@@ -130,7 +134,6 @@ inline bool issympd(Eigen::MatrixXd& mat){
 }
 }
 
-// class for storing and manipulating row indexes
 class SigmaBlock {
   public:
     intvec Dblocks;

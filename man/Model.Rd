@@ -108,7 +108,15 @@ mod <- Model$new(
 df <- nelder(~ind(20) * t(6))
 df$int <- 0
 df[df$t > 3, 'int'] <- 1
-
+# the preferred way of specifying with parameter values
+des <- Model$new(
+  formula = ~ int + (1|gr(ind)),
+  covariance = c(0.05),
+  mean = c(1,0.5),
+  data = df,
+  family = stats::poisson()
+  )
+# also works:
 des <- Model$new(
   covariance = list(
     formula = ~ (1|gr(ind)),
@@ -118,16 +126,6 @@ des <- Model$new(
     parameters = c(1,0.5)),
   data = df,
   family = stats::poisson())
-
-# or as
-des <- Model$new(
-  formula = ~ int + (1|gr(ind)),
-  covariance = list(parameters = c(0.05)),
-  mean = list(parameters = c(1,0.5)),
-  data = df,
-  family = stats::poisson()
-  )
-
 
 #an example of a spatial grid with two time points
 df <- nelder(~ (x(10)*y(10))*t(2))
@@ -366,6 +364,8 @@ require larger numbers of steps and so is slower. Smaller numbers are likely req
 \item \href{#method-Model-partial_sigma}{\code{Model$partial_sigma()}}
 \item \href{#method-Model-u}{\code{Model$u()}}
 \item \href{#method-Model-log_likelihood}{\code{Model$log_likelihood()}}
+\item \href{#method-Model-calculator_instructions}{\code{Model$calculator_instructions()}}
+\item \href{#method-Model-marginal}{\code{Model$marginal()}}
 \item \href{#method-Model-clone}{\code{Model$clone()}}
 }
 }
@@ -395,10 +395,10 @@ None. Used for effects.
 \if{latex}{\out{\hypertarget{method-Model-fitted}{}}}
 \subsection{Method \code{fitted()}}{
 Return fitted values. Does not account for the random effects. For simulated values based
-on resampling random effects, see \code{sim_data()}. To predict the values at a new location see
+on resampling random effects, see also \code{sim_data()}. To predict the values including random effects at a new location see also
 \code{predict()}.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$fitted(type = "link", X, u)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$fitted(type = "link", X, u, sample = FALSE, sample_n = 100)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -410,6 +410,11 @@ for values on the scale of the response}
 \item{\code{X}}{(Optional) Fixed effects matrix to generate fitted values}
 
 \item{\code{u}}{(Optional) Random effects values at which to generate fitted values}
+
+\item{\code{sample}}{Logical. If TRUE then the parameters will be re-sampled from their sampling distribution. Currently only works
+with existing X matrix and not user supplied matrix X and this will also ignore any provided random effects.}
+
+\item{\code{sample_n}}{Integer. If sample is TRUE, then this is the number of samples.}
 }
 \if{html}{\out{</div>}}
 }
@@ -472,14 +477,14 @@ Create a new Model object
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{formula}}{An optional model formula containing fixed and random effect terms. If not specified, then
-seaparate formulae need to be provided to the covariance and mean arguments below.}
+separate formulae need to be provided to the covariance and mean arguments below.}
 
-\item{\code{covariance}}{Either a \link[glmmrBase]{Covariance} object, or an equivalent list of arguments
-that can be passed to \code{Covariance} to create a new object. At a minimum the list must specify a formula.
+\item{\code{covariance}}{(Optional) Either a \link[glmmrBase]{Covariance} object, an equivalent list of arguments
+that can be passed to \code{Covariance} to create a new object, or a vector of parameter values. At a minimum the list must specify a formula.
 If parameters are not included then they are initialised to 0.5.}
 
-\item{\code{mean}}{Either a \link[glmmrBase]{MeanFunction} object, or an equivalent list of arguments
-that can be passed to \code{MeanFunction} to create a new object. At a minimum the list must specify a formula.
+\item{\code{mean}}{(Optional) Either a \link[glmmrBase]{MeanFunction} object, an equivalent list of arguments
+that can be passed to \code{MeanFunction} to create a new object, or a vector of parameter values. At a minimum the list must specify a formula.
 If parameters are not included then they are initialised to 0.}
 
 \item{\code{data}}{A data frame with the data required for the mean function and covariance objects. This argument
@@ -491,13 +496,13 @@ argument is optional if the family is provided either via a \code{MeanFunction} 
 objects, or as members of the list of arguments to \code{mean}. Current accepts \link[stats]{binomial},
 \link[stats]{gaussian}, \link[stats]{Gamma}, \link[stats]{poisson}, and \link[glmmrBase]{Beta}.}
 
-\item{\code{var_par}}{Scale parameter required for some distributions, including Gaussian. Default is NULL.}
+\item{\code{var_par}}{(Optional) Scale parameter required for some distributions, including Gaussian. Default is NULL.}
 
-\item{\code{offset}}{A vector of offset values. Optional - could be provided to the argument to mean instead.}
+\item{\code{offset}}{(Optional) A vector of offset values. Optional - could be provided to the argument to mean instead.}
 
-\item{\code{weights}}{A vector of weights. Optional..}
+\item{\code{weights}}{(Optional) A vector of weights.}
 
-\item{\code{trials}}{For binomial family models, the number of trials for each observation. If it is not set, then it will
+\item{\code{trials}}{(Optional) For binomial family models, the number of trials for each observation. If it is not set, then it will
 default to 1 (a bernoulli model).}
 
 \item{\code{verbose}}{Logical indicating whether to provide detailed output}
@@ -527,7 +532,15 @@ mod <- Model$new(
 df <- nelder(~ind(20) * t(6))
 df$int <- 0
 df[df$t > 3, 'int'] <- 1
-
+# the preferred way of specifying with parameter values
+des <- Model$new(
+  formula = ~ int + (1|gr(ind)),
+  covariance = c(0.05),
+  mean = c(1,0.5),
+  data = df,
+  family = stats::poisson()
+  )
+# also works:
 des <- Model$new(
   covariance = list(
     formula = ~ (1|gr(ind)),
@@ -537,16 +550,6 @@ des <- Model$new(
     parameters = c(1,0.5)),
   data = df,
   family = stats::poisson())
-
-# or as
-des <- Model$new(
-  formula = ~ int + (1|gr(ind)),
-  covariance = list(parameters = c(0.05)),
-  mean = list(parameters = c(1,0.5)),
-  data = df,
-  family = stats::poisson()
-  )
-
 
 #an example of a spatial grid with two time points
 df <- nelder(~ (x(10)*y(10))*t(2))
@@ -696,7 +699,8 @@ ysim <- des$sim_data()
 Checks for any changes in linked objects and updates.
 
 Checks for any changes in any object and updates all linked objects if
-any are detected. Generally called automatically and not required by the user.
+any are detected. Generally not required by the user.
+This function will be deprecated in future versions as checking is automatic.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Model$check(verbose = TRUE)}\if{html}{\out{</div>}}
 }
@@ -954,7 +958,9 @@ Markov Chain Monte Carlo Maximum Likelihood  model fitting
   se = "gls",
   sparse = FALSE,
   usestan = TRUE,
-  se.theta = TRUE
+  se.theta = TRUE,
+  lower.bound = NULL,
+  upper.bound = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -989,6 +995,10 @@ covariance functions.}
 
 \item{\code{se.theta}}{Logical. Whether to calculate the standard errors for the covariance parameters. This step is a slow part
 of the calculation, so can be disabled if required in larger models. Has no effect for Kenward-Roger standard errors.}
+
+\item{\code{lower.bound}}{Optional. Vector of lower bounds for the fixed effect parameters. To apply bounds use MCEM.}
+
+\item{\code{upper.bound}}{Optional. Vector of upper bounds for the fixed effect parameters. To apply bounds use MCEM.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1044,7 +1054,9 @@ Maximum Likelihood model fitting with Laplace Approximation
   se = "gls",
   max.iter = 40,
   tol = 1e-04,
-  se.theta = TRUE
+  se.theta = TRUE,
+  lower.bound = NULL,
+  upper.bound = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -1070,6 +1082,10 @@ standard errors with between-within correction to the degrees of freedom.}
 
 \item{\code{se.theta}}{Logical. Whether to calculate the standard errors for the covariance parameters. This step is a slow part
 of the calculation, so can be disabled if required in larger models. Has no effect for Kenward-Roger standard errors.}
+
+\item{\code{lower.bound}}{Optional. Vector of lower bounds for the fixed effect parameters. To apply bounds use nloptim.}
+
+\item{\code{upper.bound}}{Optional. Vector of upper bounds for the fixed effect parameters. To apply bounds use nloptim.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1240,6 +1256,100 @@ previous model fit then the random effects are assumed to be all zero.
 }
 \subsection{Returns}{
 The log-likelihood of the model parameters
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-calculator_instructions"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-calculator_instructions}{}}}
+\subsection{Method \code{calculator_instructions()}}{
+Prints the internal instructions used to calculate the linear predictor and/or
+the log likelihood. Internally the class uses a reverse polish notation to store and
+calculate different functions, including user-specified non-linear mean functions. This
+function will print all the steps. Mainly used for debugging and determining how the
+class has interpreted non-linear model specifications.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$calculator_instructions(linpred = TRUE, loglik = FALSE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{linpred}}{Logical. Whether to print the linear predictor instructions.}
+
+\item{\code{loglik}}{Logical. Whether to print the log-likelihood instructions.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None. Called for effects.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-marginal"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-marginal}{}}}
+\subsection{Method \code{marginal()}}{
+Calculates the marginal effect of variable x. There are several options for
+marginal effect and several types of conditioning or averaging. The type of marginal
+effect can be the derivative of the mean with respect to x (\code{dydx}), the expected
+difference E(y|x=a)-E(y|x=b) (\code{diff}), or the expected log ratio log(E(y|x=a)/E(y|x=b)) (\code{ratio}).
+Other fixed effect variables can be set at specific values (\code{at}), set at their mean values
+(\code{atmeans}), or averaged over (\code{average}). Averaging over a fixed effects variable here means
+using all observed values of the variable in the relevant calculation.
+The random effects can similarly be set at their
+estimated value (\code{re="estimated"}), set to zero (\code{re="zero"}), set to a specific value
+(\code{re="at"}), or averaged over (\code{re="average"}). Estimates of the expected values over the random
+effects are generated using MCMC samples. MCMC samples are generated either through
+MCML model fitting or using \code{mcmc_sample}. In the absence of samples \code{average} and \code{estimated}
+will produce the same result. The standard errors are calculated using the delta method with one
+of several options for the variance matrix of the fixed effect parameters.
+Several of the arguments require the names
+of the variables as given to the model object. Most variables are as specified in the formula,
+factor variables are specified as the name of the \code{variable_value}, e.g. \code{t_1}. To see the names
+of the stored parameters and data variables see the member function \code{names()}.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$marginal(
+  x,
+  type,
+  re,
+  se,
+  at = c(),
+  atmeans = c(),
+  average = c(),
+  xvals = c(1, 0),
+  atvals = c(),
+  revals = c()
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{x}}{String. Name of the variable to calculate the marginal effect for.}
+
+\item{\code{type}}{String. Either \code{dydx} for derivative, \code{diff} for difference, or \code{ratio} for log ratio. See description.}
+
+\item{\code{re}}{String. Either \code{estimated} to condition on estimated values, \code{zero} to set to zero, \code{at} to
+provide specific values, or \code{average} to average over the random effects.}
+
+\item{\code{se}}{String. Type of standard error to use, either \code{GLS} for the GLS standard errors, \code{KR} for
+Kenward-Roger estimated standard errors, or \code{robust} to use a robust sandwich estimator.}
+
+\item{\code{at}}{Optional. A vector of strings naming the fixed effects for which a specified value is given.}
+
+\item{\code{atmeans}}{Optional. A vector of strings naming the fixed effects that will be set at their mean value.}
+
+\item{\code{average}}{Optional. A vector of strings naming the fixed effects which will be averaged over.}
+
+\item{\code{atvals}}{Optional. A vector specifying the values of fixed effects specified in \code{at} (in the same order).}
+
+\item{\code{revals}}{Optional. If \code{re="at"} then this argument provides a vector of values for the random effects.}
+
+\item{\code{xvals.}}{Optional. A vector specifying the values of \code{a} and \code{b} for \code{diff} and \code{ratio}. The default is (1,0).}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A named vector with elements \code{margin} specifying the point estimate and \code{se} giving the standard error.
 }
 }
 \if{html}{\out{<hr>}}
