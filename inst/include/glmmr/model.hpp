@@ -157,12 +157,12 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
   
 #ifdef R_BUILD
   int total_p = at.size() + atmeans.size() + average.size() + 1;
-  if(total_p != model.linear_predictor.P())Rcpp::warning("Unnamed variables will be averaged");
+  int intercept = 1- (int)model.linear_predictor.form.RM_INT;
+  if(total_p != (model.linear_predictor.P() - intercept))Rcpp::stop("All variables must be named");
   if(at.size() != atvals.size())Rcpp::stop("Not enough values specified for at");
   if(re_type == RandomEffectMargin::Average && re.zu_.cols()<=1)Rcpp::warning("No MCMC samples of random effects. Random effects will be set at estimated values.");
 #endif
     
-  using enum Instruction;
   bool single_row = true;
   MatrixXd newXdata(1,model.linear_predictor.Xdata.cols());
   int P = model.linear_predictor.P();
@@ -170,7 +170,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
   auto xidx = std::find(model.linear_predictor.calc.data_names.begin(),model.linear_predictor.calc.data_names.end(),x);
   int xcol = xidx - model.linear_predictor.calc.data_names.begin();
   
-  if(average.size() > 0){
+  if(average.size() > 0 || (total_p == 1 && (re_type == RandomEffectMargin::Average || re_type == RandomEffectMargin::AtEstimated))){
     single_row = false;
     N = model.n();
     newXdata.conservativeResize(model.n(),NoChange);
@@ -235,8 +235,8 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
   
   // now create the new calculator object
   glmmr::calculator mcalc = model.linear_predictor.calc;
-  mcalc.instructions.push_back(Instruction::PushExtraData);
-  mcalc.instructions.push_back(Instruction::Add);
+  mcalc.instructions.push_back(Do::PushExtraData);
+  mcalc.instructions.push_back(Do::Add);
   glmmr::linear_predictor_to_link(mcalc,model.family.link);
   dblpair result;
   VectorXd delta = VectorXd::Zero(P);
@@ -295,11 +295,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
       double d_result = 0;
       dblvec m_result(2+2*P);
       dblvec delta_vec(P,0.0);
-      if(N==1){
-        newXdata(0,xcol) = xvals.first;
-      } else {
-        for(int i = 0; i < model.n(); i++)newXdata(i,xcol) = xvals.first;
-      }
+      for(int i = 0; i < newXdata.rows(); i++)newXdata(i,xcol) = xvals.first;
 #pragma omp parallel for reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) private(m_result)
       for(int i = 0; i < N; i++){
         newXdata(i,xcol) = xvals.first;
@@ -319,14 +315,9 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
       dblvec delta_vec(P,0.0);
       dblvec m_result(1+P);
       MatrixXd newXdata1(newXdata);
-      if(N==1){
-        newXdata(0,xcol) = xvals.first;
-        newXdata1(0,xcol) = xvals.second;
-      } else {
-        for(int i = 0; i < model.n(); i++){
-          newXdata(i,xcol) = xvals.first;
-          newXdata1(i,xcol) = xvals.second;
-        }
+      for(int i = 0; i < newXdata.rows(); i++){
+        newXdata(i,xcol) = xvals.first;
+        newXdata1(i,xcol) = xvals.second;
       }
 #pragma omp parallel for reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) private(m_result)
       for(int i = 0; i < N; i++){
@@ -353,14 +344,9 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
       dblvec m_result0(P+1);
       dblvec m_result1(P+1);
       MatrixXd newXdata1(newXdata);
-      if(N==1){
-        newXdata(0,xcol) = xvals.first;
-        newXdata1(0,xcol) = xvals.second;
-      } else {
-        for(int i = 0; i < model.n(); i++){
-          newXdata(i,xcol) = xvals.first;
-          newXdata1(i,xcol) = xvals.second;
-        }
+      for(int i = 0; i < newXdata.rows(); i++){
+        newXdata(i,xcol) = xvals.first;
+        newXdata1(i,xcol) = xvals.second;
       }
 #pragma omp parallel for private(m_result0,m_result1) reduction(+:d_result0) reduction(+:d_result1) \
       reduction(vec_dbl_plus:delta0) reduction(vec_dbl_plus:delta1) 
@@ -394,11 +380,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
         double d_result = 0;
         dblvec m_result(2+2*P);
         dblvec delta_vec(P,0.0);
-        if(N==1){
-          newXdata(0,xcol) = xvals.first;
-        } else {
-          for(int i = 0; i < model.n(); i++)newXdata(i,xcol) = xvals.first;
-        }
+        for(int i = 0; i < newXdata.rows(); i++)newXdata(i,xcol) = xvals.first;
 #pragma omp parallel for private(m_result) reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) collapse(2)
         for(int i = 0; i < model.n(); i++){
           for(int j = 0; j < iter; j++){
@@ -425,14 +407,9 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
         dblvec m_result(P+1);
         dblvec delta_vec(P,0.0);
         MatrixXd newXdata1(newXdata);
-        if(N==1){
-          newXdata(0,xcol) = xvals.first;
-          newXdata1(0,xcol) = xvals.second;
-        } else {
-          for(int i = 0; i < model.n(); i++){
-            newXdata(i,xcol) = xvals.first;
-            newXdata1(i,xcol) = xvals.second;
-          }
+        for(int i = 0; i < newXdata.rows(); i++){
+          newXdata(i,xcol) = xvals.first;
+          newXdata1(i,xcol) = xvals.second;
         }
         
 #pragma omp parallel for private(m_result) reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) collapse(2)
@@ -473,14 +450,9 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
         dblvec m_result0(1+P);
         dblvec m_result1(1+P);
         MatrixXd newXdata1(newXdata);
-        if(N==1){
-          newXdata(0,xcol) = xvals.first;
-          newXdata1(0,xcol) = xvals.second;
-        } else {
-          for(int i = 0; i < model.n(); i++){
-            newXdata(i,xcol) = xvals.first;
-            newXdata1(i,xcol) = xvals.second;
-          }
+        for(int i = 0; i < newXdata.rows(); i++){
+          newXdata(i,xcol) = xvals.first;
+          newXdata1(i,xcol) = xvals.second;
         }
 #pragma omp parallel for private(m_result0,m_result1) reduction(+:d_result0) reduction(+:d_result1) \
         reduction(vec_dbl_plus:delta0) reduction(vec_dbl_plus:delta1) collapse(2)
