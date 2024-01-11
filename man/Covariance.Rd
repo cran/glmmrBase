@@ -55,7 +55,6 @@ Updating of parameters is automatic if using the `update_parameters()` member fu
 Using `update_parameters()` is the preferred way of updating the parameters of the
 mean or covariance objects as opposed to direct assignment, e.g. `self$parameters <- c(...)`.
 The function calls check functions to automatically update linked matrices with the new parameters.
-If using direct assignment, call `self$check()` afterwards.
 }
 \examples{
 
@@ -70,20 +69,6 @@ df <- nelder(~(cl(5)*t(5)) > ind(5))
 cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
                       parameters = c(0.05,0.7),
                       data= df)
-
-## ------------------------------------------------
-## Method `Covariance$check`
-## ------------------------------------------------
-
-\dontshow{
-setParallel(FALSE) # for the CRAN check
-}
-df <- nelder(~(cl(5)*t(5)) > ind(5))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
-                      parameters = c(0.03,0.8),
-                      data= df)
-cov$parameters <- c(0.25,0.1)
-cov$check(verbose=FALSE)
 
 ## ------------------------------------------------
 ## Method `Covariance$print`
@@ -130,11 +115,10 @@ cov$subset(1:100)
 \itemize{
 \item \href{#method-Covariance-n}{\code{Covariance$n()}}
 \item \href{#method-Covariance-new}{\code{Covariance$new()}}
-\item \href{#method-Covariance-check}{\code{Covariance$check()}}
 \item \href{#method-Covariance-update_parameters}{\code{Covariance$update_parameters()}}
 \item \href{#method-Covariance-print}{\code{Covariance$print()}}
 \item \href{#method-Covariance-subset}{\code{Covariance$subset()}}
-\item \href{#method-Covariance-get_chol_D}{\code{Covariance$get_chol_D()}}
+\item \href{#method-Covariance-chol_D}{\code{Covariance$chol_D()}}
 \item \href{#method-Covariance-log_likelihood}{\code{Covariance$log_likelihood()}}
 \item \href{#method-Covariance-simulate_re}{\code{Covariance$simulate_re()}}
 \item \href{#method-Covariance-sparse}{\code{Covariance$sparse()}}
@@ -190,42 +174,6 @@ df <- nelder(~(cl(5)*t(5)) > ind(5))
 cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
                       parameters = c(0.05,0.7),
                       data= df)
-}
-\if{html}{\out{</div>}}
-
-}
-
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Covariance-check"></a>}}
-\if{latex}{\out{\hypertarget{method-Covariance-check}{}}}
-\subsection{Method \code{check()}}{
-Check if anything has changed and update matrices if so.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Covariance$check(verbose = TRUE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{verbose}}{Logical whether to report if any changes detected.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-NULL
-}
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{\dontshow{
-setParallel(FALSE) # for the CRAN check
-}
-df <- nelder(~(cl(5)*t(5)) > ind(5))
-cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
-                      parameters = c(0.03,0.8),
-                      data= df)
-cov$parameters <- c(0.25,0.1)
-cov$check(verbose=FALSE)
 }
 \if{html}{\out{</div>}}
 
@@ -313,12 +261,12 @@ cov$subset(1:100)
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Covariance-get_chol_D"></a>}}
-\if{latex}{\out{\hypertarget{method-Covariance-get_chol_D}{}}}
-\subsection{Method \code{get_chol_D()}}{
+\if{html}{\out{<a id="method-Covariance-chol_D"></a>}}
+\if{latex}{\out{\hypertarget{method-Covariance-chol_D}{}}}
+\subsection{Method \code{chol_D()}}{
 Returns the Cholesky decomposition of the covariance matrix D
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Covariance$get_chol_D()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Covariance$chol_D()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
@@ -364,16 +312,18 @@ A vector of random effect values
 \if{html}{\out{<a id="method-Covariance-sparse"></a>}}
 \if{latex}{\out{\hypertarget{method-Covariance-sparse}{}}}
 \subsection{Method \code{sparse()}}{
-If this function is called then sparse matrix methods will be used for calculations
-involving D
+If this function is called then sparse matrix methods will be used for calculations involving D
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Covariance$sparse(sparse = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Covariance$sparse(sparse = TRUE, amd = TRUE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{sparse}}{Logical. Whether to use sparse methods (TRUE) or not (FALSE)}
+
+\item{\code{amd}}{Logical indicating whether to use and Approximate Minimum Degree algorithm to calculate an efficient permutation matrix so 
+that the Cholesky decomposition of PAP^T is calculated rather than A.}
 }
 \if{html}{\out{</div>}}
 }

@@ -8,11 +8,12 @@ using namespace Eigen;
 
 class ModelExtraData{
 public:
-  VectorXd offset = VectorXd::Zero(1);
-  ArrayXd weights = ArrayXd::Constant(1,1.0);
-  ArrayXd variance = ArrayXd::Constant(1,1.0);
-  double var_par = 1;
-  VectorXd y = VectorXd::Constant(1,1.0);
+  VectorXd    offset = VectorXd::Zero(1);
+  ArrayXd     weights = ArrayXd::Constant(1,1.0);
+  ArrayXd     variance = ArrayXd::Constant(1,1.0);
+  double      var_par = 1;
+  VectorXd    y = VectorXd::Constant(1,1.0);
+  //constructors
   ModelExtraData(){};
   ModelExtraData(int n){
     offset.conservativeResize(n);
@@ -21,6 +22,8 @@ public:
     weights.setConstant(1.0);
     variance.conservativeResize(n);
     variance.setConstant(1.0);
+    y.conservativeResize(n);
+    y.setZero();
   }
   ModelExtraData(const glmmr::ModelExtraData& data) : offset(data.offset), weights(data.weights), variance(data.variance), var_par(data.var_par), y(data.y) {};
   

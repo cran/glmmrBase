@@ -17,35 +17,25 @@ struct check_type : std::false_type {};
 template<>
 struct check_type<glmmr::ModelBits<glmmr::Covariance, glmmr::LinearPredictor> > : std::true_type {};
 
-enum class MarginType {
-  DyDx = 0,
-  Diff = 1,
-  Ratio = 2
-};
-
-enum class SE {
-  GLS = 0,
-  KR = 1,
-  Robust = 2,
-  BW = 3
-};
-
 template<typename modeltype>
 class Model {
 public:
-  modeltype model;
+  // model objects
+  modeltype                       model;
   glmmr::RandomEffects<modeltype> re;
-  glmmr::ModelMatrix<modeltype> matrix;
-  glmmr::ModelOptim<modeltype> optim;
-  glmmr::ModelMCMC<modeltype> mcmc;
+  glmmr::ModelMatrix<modeltype>   matrix;
+  glmmr::ModelOptim<modeltype>    optim;
+  glmmr::ModelMCMC<modeltype>     mcmc;
+  // constructor
   Model(const std::string& formula_,const ArrayXXd& data_,const strvec& colnames_,std::string family_,std::string link_);
-  virtual void set_offset(const VectorXd& offset_);
-  virtual void set_weights(const ArrayXd& weights_);
-  virtual void set_y(const VectorXd& y_);
-  virtual void update_beta(const dblvec &beta_);
-  virtual void update_theta(const dblvec &theta_);
-  virtual void update_u(const MatrixXd &u_);
-  virtual void set_trace(int trace_);
+  //functions
+  virtual void    set_offset(const VectorXd& offset_);
+  virtual void    set_weights(const ArrayXd& weights_);
+  virtual void    set_y(const VectorXd& y_);
+  virtual void    update_beta(const dblvec &beta_);
+  virtual void    update_theta(const dblvec &theta_);
+  virtual void    update_u(const MatrixXd &u_);
+  virtual void    set_trace(int trace_);
   virtual dblpair marginal(const MarginType type,
                              const std::string& x,
                              const strvec& at,
@@ -91,13 +81,14 @@ inline void glmmr::Model<modeltype>::set_y(const VectorXd& y_){
 
 template<typename modeltype>
 inline void glmmr::Model<modeltype>::update_beta(const dblvec &beta_){
-  model.linear_predictor.update_parameters(beta_);
+  optim.update_beta(beta_);
 }
 
 template<typename modeltype>
 inline void glmmr::Model<modeltype>::update_theta(const dblvec &theta_){
   model.covariance.update_parameters(theta_);
   re.zu_ = model.covariance.ZLu(re.u_);
+  model.vcalc.data = model.covariance.ZL();
 }
 
 template<typename modeltype>
@@ -155,16 +146,17 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
   std::transform(omp_out.begin(), omp_out.end(), omp_in.begin(), omp_out.begin(), std::plus<double>())) \
   initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
   
-#ifdef R_BUILD
   int total_p = at.size() + atmeans.size() + average.size() + 1;
   int intercept = 1- (int)model.linear_predictor.form.RM_INT;
+  
+#ifdef R_BUILD
   if(total_p != (model.linear_predictor.P() - intercept))Rcpp::stop("All variables must be named");
   if(at.size() != atvals.size())Rcpp::stop("Not enough values specified for at");
   if(re_type == RandomEffectMargin::Average && re.zu_.cols()<=1)Rcpp::warning("No MCMC samples of random effects. Random effects will be set at estimated values.");
 #endif
     
   bool single_row = true;
-  MatrixXd newXdata(1,model.linear_predictor.Xdata.cols());
+  MatrixXd newXdata(1,model.linear_predictor.calc.data.cols());
   int P = model.linear_predictor.P();
   int N = 1;
   auto xidx = std::find(model.linear_predictor.calc.data_names.begin(),model.linear_predictor.calc.data_names.end(),x);
@@ -174,7 +166,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
     single_row = false;
     N = model.n();
     newXdata.conservativeResize(model.n(),NoChange);
-    newXdata.col(xcol) = model.linear_predictor.Xdata.col(xcol);
+    newXdata.col(xcol) = model.linear_predictor.calc.data.col(xcol);
     
 #ifdef R_BUILD
    if(re_type == RandomEffectMargin::At && atrevals.size() != model.covariance.Q())Rcpp::stop("Need to provide values for u vector");
@@ -184,7 +176,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
      auto colidx = std::find(model.linear_predictor.calc.data_names.begin(),model.linear_predictor.calc.data_names.end(),p);
      if(colidx != model.linear_predictor.calc.data_names.end()){
        int pcol = colidx - model.linear_predictor.calc.data_names.begin();
-       newXdata.col(pcol) = model.linear_predictor.Xdata.col(pcol);
+       newXdata.col(pcol) = model.linear_predictor.calc.data.col(pcol);
      } else {
 #ifdef R_BUILD
        Rcpp::stop("Variable "+p+" not in data names");  
@@ -220,7 +212,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
       if(colidx != model.linear_predictor.calc.data_names.end()){
         int pcol = colidx - model.linear_predictor.calc.data_names.begin();
         double xmean = 0;
-        for(int i = 0; i < model.n(); i++) xmean += model.linear_predictor.Xdata(i,pcol);
+        for(int i = 0; i < model.n(); i++) xmean += model.linear_predictor.calc.data(i,pcol);
         xmean *= (1.0/model.n());
         for(int i = 0; i < newXdata.rows(); i++){
           newXdata(i,pcol) = xmean;
@@ -238,6 +230,10 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
   mcalc.instructions.push_back(Do::PushExtraData);
   mcalc.instructions.push_back(Do::Add);
   glmmr::linear_predictor_to_link(mcalc,model.family.link);
+  mcalc.data.conservativeResize(newXdata.rows(),newXdata.cols());
+  mcalc.data = newXdata;
+  mcalc.parameters.resize(model.linear_predictor.P());
+  mcalc.parameters = model.linear_predictor.parameters;
   dblpair result;
   VectorXd delta = VectorXd::Zero(P);
   MatrixXd M(P,P);
@@ -245,8 +241,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
 #if defined(R_BUILD) && defined(ENABLE_DEBUG)
   Rcpp::Rcout << "\nMARGINS\nN: " << N << " xcol: " << xcol;
   Rcpp::Rcout << "\nTest calculator\nUsing X: " << newXdata.row(0);
-  dblvec test_result = mcalc.calculate<CalcDyDx::XBeta>(0,model.linear_predictor.parameters,
-                                          newXdata,0,xcol,0);
+  dblvec test_result = mcalc.calculate<CalcDyDx::XBeta>(0,0,xcol,0);
   Rcpp::Rcout << "\nValues: ";
   for(const auto& i: test_result) Rcpp::Rcout << i << " ";
 #endif
@@ -254,10 +249,16 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
   switch(se_type){
     case SE::KR:
       {
-      kenward_data kdata = matrix.kenward_roger();
+      CorrectionData<SE::KR> kdata = matrix.template small_sample_correction<SE::KR>();
       M = kdata.vcov_beta;
       break;
       }
+    case SE::KR2:
+    {
+      CorrectionData<SE::KR2> kdata = matrix.template small_sample_correction<SE::KR2>();
+      M = kdata.vcov_beta;
+      break;
+    }
     case SE::Robust:
       M = matrix.sandwich_matrix();
       break;
@@ -299,8 +300,7 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
 #pragma omp parallel for reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) private(m_result)
       for(int i = 0; i < N; i++){
         newXdata(i,xcol) = xvals.first;
-        m_result = mcalc.calculate<CalcDyDx::XBeta>(i,model.linear_predictor.parameters,
-                                          newXdata,0,xcol,zu(i));
+        m_result = mcalc.calculate<CalcDyDx::XBeta>(i,0,xcol,zu(i));
         d_result += m_result[1];
         for(int p = 0; p < P; p++)delta_vec[p] += m_result[p+2+P];
       }
@@ -314,19 +314,14 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
       double d_result = 0;
       dblvec delta_vec(P,0.0);
       dblvec m_result(1+P);
-      MatrixXd newXdata1(newXdata);
-      for(int i = 0; i < newXdata.rows(); i++){
-        newXdata(i,xcol) = xvals.first;
-        newXdata1(i,xcol) = xvals.second;
-      }
+      for(int i = 0; i < newXdata.rows(); i++)mcalc.data(i,xcol) = xvals.first;
 #pragma omp parallel for reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) private(m_result)
       for(int i = 0; i < N; i++){
-        m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                           newXdata,0,0,zu(i));
+        m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,zu(i));
         d_result += m_result[0];
         for(int p = 0; p < P; p++)delta_vec[p] += m_result[p+1];
-        m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                               newXdata1,0,0,zu(i));
+        for(int i = 0; i < newXdata.rows(); i++)mcalc.data(i,xcol) = xvals.second;
+        m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,zu(i));
         d_result += -1.0*m_result[0];
         for(int p = 0; p < P; p++)delta_vec[p] += -1.0*m_result[p+1];
       }
@@ -343,18 +338,13 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
       dblvec delta1(P,0);
       dblvec m_result0(P+1);
       dblvec m_result1(P+1);
-      MatrixXd newXdata1(newXdata);
-      for(int i = 0; i < newXdata.rows(); i++){
-        newXdata(i,xcol) = xvals.first;
-        newXdata1(i,xcol) = xvals.second;
-      }
+      for(int i = 0; i < newXdata.rows(); i++) newXdata(i,xcol) = xvals.first;
 #pragma omp parallel for private(m_result0,m_result1) reduction(+:d_result0) reduction(+:d_result1) \
       reduction(vec_dbl_plus:delta0) reduction(vec_dbl_plus:delta1) 
       for(int i = 0; i < N; i++){
-        m_result0 = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                               newXdata,0,0,zu(i));
-        m_result1 = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                        newXdata1,0,0,zu(i));
+        m_result0 = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,zu(i));
+        for(int i = 0; i < newXdata.rows(); i++) mcalc.data(i,xcol) = xvals.second;
+        m_result1 = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,zu(i));
         d_result0 += m_result0[0];
         d_result1 += m_result1[0];
         for(int p = 0; p < P; p++){
@@ -385,11 +375,9 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
         for(int i = 0; i < model.n(); i++){
           for(int j = 0; j < iter; j++){
             if(N==1){
-              m_result = mcalc.calculate<CalcDyDx::XBeta>(0,model.linear_predictor.parameters,
-                                                          newXdata,0,xcol,re.zu_(i,j));
+              m_result = mcalc.calculate<CalcDyDx::XBeta>(0,0,xcol,re.zu_(i,j));
             } else {
-              m_result = mcalc.calculate<CalcDyDx::XBeta>(i,model.linear_predictor.parameters,
-                                                          newXdata,0,xcol,re.zu_(i,j));
+              m_result = mcalc.calculate<CalcDyDx::XBeta>(i,0,xcol,re.zu_(i,j));
             }
             d_result += m_result[1];
             for(int p = 0; p < P; p++)delta_vec[p] += m_result[p+2+P];
@@ -406,30 +394,22 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
         double d_result = 0;
         dblvec m_result(P+1);
         dblvec delta_vec(P,0.0);
-        MatrixXd newXdata1(newXdata);
-        for(int i = 0; i < newXdata.rows(); i++){
-          newXdata(i,xcol) = xvals.first;
-          newXdata1(i,xcol) = xvals.second;
-        }
-        
+        for(int i = 0; i < newXdata.rows(); i++)newXdata(i,xcol) = xvals.first;
 #pragma omp parallel for private(m_result) reduction(+:d_result) reduction(vec_dbl_plus:delta_vec) collapse(2)
         for(int i = 0; i < model.n(); i++){
           for(int j = 0; j < iter; j++){
             if(N==1){
-              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(0,model.linear_predictor.parameters,
-                                                                     newXdata,0,0,re.zu_(i,j));
+              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(0,0,0,re.zu_(i,j));
             } else {
-              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                                     newXdata,0,0,re.zu_(i,j));
+              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,re.zu_(i,j));
             }
             d_result += m_result[0];
             for(int p = 0; p < P; p++)delta_vec[p] += m_result[p+1];
+            for(int i = 0; i < newXdata.rows(); i++)mcalc.data(i,xcol) = xvals.second;
             if(N==1){
-              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(0,model.linear_predictor.parameters,
-                                                              newXdata1,0,0,re.zu_(i,j));
+              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(0,0,0,re.zu_(i,j));
             } else {
-              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                                newXdata1,0,0,re.zu_(i,j));
+              m_result = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,re.zu_(i,j));
             }
             d_result += -1.0*m_result[0];
             for(int p = 0; p < P; p++)delta_vec[p] += -1.0*m_result[p+1];
@@ -449,25 +429,19 @@ inline dblpair glmmr::Model<modeltype>::marginal(const MarginType type,
         dblvec delta1(P,0);
         dblvec m_result0(1+P);
         dblvec m_result1(1+P);
-        MatrixXd newXdata1(newXdata);
-        for(int i = 0; i < newXdata.rows(); i++){
-          newXdata(i,xcol) = xvals.first;
-          newXdata1(i,xcol) = xvals.second;
-        }
+        for(int i = 0; i < newXdata.rows(); i++)newXdata(i,xcol) = xvals.first;
 #pragma omp parallel for private(m_result0,m_result1) reduction(+:d_result0) reduction(+:d_result1) \
         reduction(vec_dbl_plus:delta0) reduction(vec_dbl_plus:delta1) collapse(2)
         for(int i = 0; i < model.n(); i++){
           for(int j = 0; j < iter; j++){
             if(N==1){
-              m_result0 = mcalc.calculate<CalcDyDx::BetaFirst>(1,model.linear_predictor.parameters,
-                                                                      newXdata,0,0,re.zu_(i,j));
-              m_result1 = mcalc.calculate<CalcDyDx::BetaFirst>(1,model.linear_predictor.parameters,
-                                                                      newXdata1,0,0,re.zu_(i,j));
+              m_result0 = mcalc.calculate<CalcDyDx::BetaFirst>(1,0,0,re.zu_(i,j));
+              for(int i = 0; i < newXdata.rows(); i++)mcalc.data(i,xcol) = xvals.second;
+              m_result1 = mcalc.calculate<CalcDyDx::BetaFirst>(1,0,0,re.zu_(i,j));
             } else {
-              m_result0 = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                               newXdata,0,0,re.zu_(i,j));
-              m_result1 = mcalc.calculate<CalcDyDx::BetaFirst>(i,model.linear_predictor.parameters,
-                                                               newXdata1,0,0,re.zu_(i,j));
+              m_result0 = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,re.zu_(i,j));
+              for(int i = 0; i < newXdata.rows(); i++)mcalc.data(i,xcol) = xvals.second;
+              m_result1 = mcalc.calculate<CalcDyDx::BetaFirst>(i,0,0,re.zu_(i,j));
             }
             d_result0 += m_result0[0];
             d_result1 += m_result1[0];

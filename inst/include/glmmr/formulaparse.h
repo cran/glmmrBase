@@ -9,9 +9,11 @@ inline bool parse_formula(std::vector<char>& formula,
                           glmmr::calculator& calc,
                           const ArrayXXd& data,
                           const strvec& colnames,
-                          MatrixXd& Xdata){
-  #ifdef ENABLE_DEBUG
-  Rcpp::Rcout << "\nFORMULA PARSING\nFormula: ";
+                          MatrixXd& Xdata,
+                          bool bracket_flag = false){
+  
+  #if defined(ENABLE_DEBUG) && defined(R_BUILD)
+  Rcpp::Rcout << "\nFORMULA PARSE\nFormula: ";
   for(const auto& i: formula) Rcpp::Rcout << i;
   #endif
   
@@ -39,8 +41,8 @@ inline bool parse_formula(std::vector<char>& formula,
     cursor++;
   }
   if(has_found_symbol){
-    #ifdef ENABLE_DEBUG
-    Rcpp::Rcout << " Split at +/-";
+    #if defined(ENABLE_DEBUG) && defined(R_BUILD)
+    Rcpp::Rcout << " Split at +/-: " << formula[cursor];
     #endif
     // split at +/-
     if(formula[cursor]=='+'){
@@ -62,24 +64,18 @@ inline bool parse_formula(std::vector<char>& formula,
     str s1_as_str(s1.begin(),s1.end());
     auto col_idx = std::find(colnames.begin(),colnames.end(),s1_as_str);
     if(col_idx != colnames.end()){
-      str s1_parname = "b_" + s1_as_str;
-      s1.push_back('*');
-      for(unsigned int j = 0; j < s1_parname.size(); j++){
-        s1.push_back(s1_parname[j]);
-      }
+      str s1_parname = "b_" + s1_as_str + "*";
+      s1.insert(s1.begin(),s1_parname.begin(),s1_parname.end());
     }
     
     str s2_as_str(s2.begin(),s2.end());
     col_idx = std::find(colnames.begin(),colnames.end(),s2_as_str);
     if(col_idx != colnames.end()){
-      str s2_parname = "b_" + s2_as_str;
-      s2.push_back('*');
-      for(unsigned int j = 0; j < s2_parname.size(); j++){
-        s2.push_back(s2_parname[j]);
-      }
+      str s2_parname = "b_" + s2_as_str + "*";
+      s2.insert(s2.begin(),s2_parname.begin(),s2_parname.end());
     }
-    parse_formula(s1,calc,data,colnames,Xdata);
-    parse_formula(s2,calc,data,colnames,Xdata);
+    parse_formula(s1,calc,data,colnames,Xdata,bracket_flag);
+    parse_formula(s2,calc,data,colnames,Xdata,bracket_flag);
   } else {
     // no +/- to split at, try *//
     s1.clear();
@@ -102,8 +98,8 @@ inline bool parse_formula(std::vector<char>& formula,
       cursor++;
     }
     if(has_found_symbol){
-      #ifdef ENABLE_DEBUG
-      Rcpp::Rcout << " Split at */";
+      #if defined(ENABLE_DEBUG) && defined(R_BUILD)
+      Rcpp::Rcout << " Split at */ : " << formula[cursor];
       #endif
       // split at *//
       if(formula[cursor]=='*'){
@@ -121,10 +117,11 @@ inline bool parse_formula(std::vector<char>& formula,
         s2.push_back(formula[cursor]);
         cursor++;
       }
-      
-      s1_check = parse_formula(s1,calc,data,colnames,Xdata);
-      s2_check = parse_formula(s2,calc,data,colnames,Xdata);
-      if(s1_check && s2_check)calc.any_nonlinear = true;
+      s2.insert(s2.begin(),'('); // hacky way of avoiding a crash if s2 is a parameter - no idea why it happens
+      s2.insert(s2.end(),')');
+      s1_check = parse_formula(s1,calc,data,colnames,Xdata,bracket_flag);
+      s2_check = parse_formula(s2,calc,data,colnames,Xdata,bracket_flag);
+      if((s1_check && s2_check) || (s2_check && calc.instructions.back() == Do::Divide)) calc.any_nonlinear = true;
     } else {
       // no * to split at, try pow
       s1.clear();
@@ -148,7 +145,7 @@ inline bool parse_formula(std::vector<char>& formula,
       }
       if(has_found_symbol){
         // split at ^
-        #ifdef ENABLE_DEBUG
+        #if defined(ENABLE_DEBUG) && defined(R_BUILD)
         Rcpp::Rcout << " Split at ^";
         #endif
         if(formula[cursor]=='^'){
@@ -163,8 +160,8 @@ inline bool parse_formula(std::vector<char>& formula,
           s2.push_back(formula[cursor]);
           cursor++;
         }
-        s1_check = parse_formula(s1,calc,data,colnames,Xdata);
-        s2_check = parse_formula(s2,calc,data,colnames,Xdata);
+        s1_check = parse_formula(s1,calc,data,colnames,Xdata,bracket_flag);
+        s2_check = parse_formula(s2,calc,data,colnames,Xdata,bracket_flag);
         if(s1_check || s2_check)calc.any_nonlinear = true;
       } else {
         // no pow, try brackets
@@ -173,7 +170,6 @@ inline bool parse_formula(std::vector<char>& formula,
         cursor=0;
         bracket_count = 0;
         while(!has_found_symbol && cursor < nchar){
-          //if(cursor==0 && formula[cursor]=='(')break;
           if(formula[cursor]=='('){
             has_found_symbol = true;
             break;
@@ -184,7 +180,7 @@ inline bool parse_formula(std::vector<char>& formula,
         }
         str token_as_str(s1.begin(),s1.end());
         if(has_found_symbol){
-          #ifdef ENABLE_DEBUG
+          #if defined(ENABLE_DEBUG) && defined(R_BUILD)
           Rcpp::Rcout << " Brackets";
           #endif
           cursor++;
@@ -199,7 +195,7 @@ inline bool parse_formula(std::vector<char>& formula,
           #endif
           // process s1 as function (if size > 0)
           if(s1.size()>0){
-            #ifdef ENABLE_DEBUG
+            #if defined(ENABLE_DEBUG) && defined(R_BUILD)
             Rcpp::Rcout << " function";
             #endif
             if(token_as_str == "factor"){
@@ -235,7 +231,7 @@ inline bool parse_formula(std::vector<char>& formula,
                   calc.indexes.push_back(calc.parameter_count);
                   calc.parameter_count++;
                 }
-                added_a_parameter = true;
+                // added_a_parameter = true;
               } else {
                 #ifdef R_BUILD
                 Rcpp::stop("Factor variable " + token_as_str + " not in data");
@@ -257,15 +253,15 @@ inline bool parse_formula(std::vector<char>& formula,
                 Rcpp::stop("String " + token_as_str + " is not a recognised function");
                 #endif
               }
-              s2_check = parse_formula(s2,calc,data,colnames,Xdata);
+              s2_check = parse_formula(s2,calc,data,colnames,Xdata,bracket_flag);
               if(s2_check)calc.any_nonlinear = true;
             }
           } else {
-            #ifdef ENABLE_DEBUG
+            #if defined(ENABLE_DEBUG) && defined(R_BUILD)
             Rcpp::Rcout << " evaluate interior function";
             #endif
             // else evaluate the inside of the brackets
-            s2_check = parse_formula(s2,calc,data,colnames,Xdata);
+            s2_check = parse_formula(s2,calc,data,colnames,Xdata,true);
             if(s2_check)calc.any_nonlinear = true;
           }
         } else {
@@ -273,7 +269,7 @@ inline bool parse_formula(std::vector<char>& formula,
           auto colidx = std::find(colnames.begin(),colnames.end(),token_as_str);
           if(colidx != colnames.end()){
             
-            #ifdef ENABLE_DEBUG
+            #if defined(ENABLE_DEBUG) && defined(R_BUILD)
             Rcpp::Rcout << " data";
             #endif
             // token is the name of a variable
@@ -287,12 +283,12 @@ inline bool parse_formula(std::vector<char>& formula,
           } else if(glmmr::is_number(token_as_str)) {
             double a = std::stod(token_as_str); 
             
-            #ifdef ENABLE_DEBUG
+            #if defined(ENABLE_DEBUG) && defined(R_BUILD)
             Rcpp::Rcout << " double = " << a << " push index = " << instruction_str.at(static_cast<Do>(calc.user_number_count));
             #endif
             
             #ifdef R_BUILD
-            if(calc.user_number_count >=10)Rcpp::stop("Only ten user numbers currently permitted.");
+            if(calc.user_number_count >=20)Rcpp::stop("Only ten user numbers currently permitted.");
             #endif
             
             calc.instructions.push_back(static_cast<Do>(calc.user_number_count));
@@ -300,30 +296,43 @@ inline bool parse_formula(std::vector<char>& formula,
             calc.user_number_count++;
             
           } else {
-            #ifdef ENABLE_DEBUG
-            Rcpp::Rcout << " parameter name";
+            #if defined(ENABLE_DEBUG) && defined(R_BUILD)
+            Rcpp::Rcout << " parameter name: " << token_as_str;
             #endif
             // interpret any other string as the name of a parameter
+            // check if the parameter already exists
             calc.instructions.push_back(Do::PushParameter);
-            calc.parameter_names.push_back(token_as_str);
-            calc.indexes.push_back(calc.parameter_count);
-            calc.parameter_count++;
+            auto find_parameter = std::find(calc.parameter_names.begin(),calc.parameter_names.end(),token_as_str);
+            if(find_parameter != calc.parameter_names.end()){
+              int param_position = find_parameter - calc.parameter_names.begin();
+#if defined(ENABLE_DEBUG) && defined(R_BUILD)
+              Rcpp::Rcout << "\nRepeated parameter " << token_as_str << " position: " << param_position << "\nCurrent parameters: ";
+              for(const auto& p: calc.parameter_names) Rcpp::Rcout << p << " ";
+#endif
+              calc.indexes.push_back(param_position);
+            } else {
+              calc.parameter_names.push_back(token_as_str);
+              calc.indexes.push_back(calc.parameter_count);
+              calc.parameter_count++;
+            }
             added_a_parameter = true;
+            if(bracket_flag)calc.any_nonlinear = true;
           }
         }
       }
     }
   }
   
-  #ifdef ENABLE_DEBUG
+  #if defined(ENABLE_DEBUG) && defined(R_BUILD)
   Rcpp::Rcout << "\nOriginal formula: ";
   for(const auto& j: formula)Rcpp::Rcout << j;
   Rcpp::Rcout << "\ncalc:\n";
-  for(const auto& i: calc.instructions)Rcpp::Rcout << instruction_str.at(i) << "\n";
-  Rcpp::Rcout << " parameter count: " << calc.parameter_count << " indexes:\n";
+  for(const auto& i: calc.instructions)Rcpp::Rcout << instruction_str.at(i) << " ";
+  Rcpp::Rcout << "\nParameter count: " << calc.parameter_count << " indexes:\n";
   glmmr::print_vec_1d<intvec>(calc.indexes);
-  Rcpp::Rcout<< " numbers:\n";
-  if(calc.user_number_count>0)for(int i = 0; i < calc.user_number_count; i++)Rcpp::Rcout << calc.numbers[i] << " ";
+  Rcpp::Rcout<< "\nnumbers: ";
+  if(calc.user_number_count>0)for(const auto& i: calc.numbers)Rcpp::Rcout << i << " ";
+  Rcpp::Rcout << "\nAny nonlinear: " << calc.any_nonlinear << "\nEND\n";
   #endif
   
   return added_a_parameter;

@@ -46,31 +46,6 @@ MeanFunction <- R6::R6Class("MeanFunction",
                             nrow(self$data)
                           },
                           #' @description 
-                          #' Checks if any changes have been made and updates
-                          #' 
-                          #' Checks if any changes have been made and updates, usually called automatically.
-                          #' @param verbose Logical whether to report if any changes detected.
-                          #' @return NULL
-                          #' @examples
-                          #' \dontshow{
-                          #' setParallel(FALSE) # for the CRAN check
-                          #' }
-                          #' df <- nelder(~(cl(4)*t(5)) > ind(5))
-                          #' df$int <- 0
-                          #' df[df$cl <= 5, 'int'] <- 1
-                          #' mf1 <- MeanFunction$new(formula = ~ int ,
-                          #'                         data=df,
-                          #'                         parameters = c(-1,1)
-                          #'                         )
-                          #' mf1$parameters <- c(0,0)
-                          #' mf1$check()
-                          check = function(verbose=TRUE){
-                            if(private$hash != private$hash_do()){
-                              if(verbose)message("Updating model")
-                              private$genX()
-                              private$hash <- private$hash_do()
-                            }},
-                          #' @description 
                           #' Create a new MeanFunction object
                           #' 
                           #' @details 
@@ -144,7 +119,6 @@ MeanFunction <- R6::R6Class("MeanFunction",
                           #' Using `update_parameters()` is the preferred way of updating the parameters of the 
                           #' mean or covariance objects as opposed to direct assignment, e.g. `self$parameters <- c(...)`. 
                           #' The function calls check functions to automatically update linked matrices with the new parameters.
-                          #' If using direct assignment, call `self$check()` afterwards. 
                           #' 
                           #' @param parameters A vector of parameters for the mean function.
                           #' @param verbose Logical indicating whether to provide more detailed feedback
@@ -153,12 +127,11 @@ MeanFunction <- R6::R6Class("MeanFunction",
                             Linpred__update_pars(private$ptr,self$parameters)
                             if(Linpred__any_nonlinear(private$ptr))self$X <- Linpred__x(private$ptr)
                             names(self$parameters) <- Linpred__beta_names(private$ptr)
-                            self$check(FALSE)
                           },
                           #' @description 
                           #' Returns or replaces the column names of the data in the object
                           #' 
-                          #' @param names If NULL then the function prints the column names, if a vector of names, then it attemps to 
+                          #' @param names If NULL then the function prints the column names, if a vector of names, then it attempts to 
                           #' replace the current column names of the data
                           #' @examples 
                           #' \dontshow{
@@ -204,29 +177,8 @@ MeanFunction <- R6::R6Class("MeanFunction",
                             self$X <- self$X[index,]
                             self$data <- self$data[index,]
                             self$offset <- self$offset[index]
-                          },
-                          #' @description 
-                          #' Keeps a subset of the columns of X 
-                          #' 
-                          #' All indices not in the provided vector of column numbers will be removed from the fixed effects design
-                          #' matrix X.
-                          #' 
-                          #' @param index Columns of X to keep
-                          #' @return NULL
-                          #' @examples 
-                          #' \dontshow{
-                          #' setParallel(FALSE) # for the CRAN check
-                          #' }
-                          #' df <- nelder(~(cl(4)*t(5)) > ind(5))
-                          #' df$int <- 0
-                          #' df[df$cl <= 5, 'int'] <- 1
-                          #' mf1 <- MeanFunction$new(formula = ~ int ,
-                          #'                         data=df,
-                          #'                         parameters = c(-1,1)
-                          #'                         )
-                          #' mf1$subset_cols(1:2) 
-                          subset_cols = function(index){
-                            self$X <- self$X[,index]
+                            private$update_ptr()
+                            private$genX()
                           },
                           #' @description 
                           #' Returns the linear predictor 
@@ -238,23 +190,24 @@ MeanFunction <- R6::R6Class("MeanFunction",
                             if(is(xb,"matrix"))xb <- drop(xb)
                             if(is(xb,"Matrix"))xb <- Matrix::drop(xb)
                             return(xb)
+                          },
+                          #' @description
+                          #' Returns a logical indicating whether the mean function contains non-linear functions of model parameters.
+                          #' Mainly used internally.
+                          #' @return None. Called for effects
+                          any_nonlinear = function(){
+                            return(Linpred__any_nonlinear(private$ptr))
                           }
                         ),
                         private = list(
                           mod_string = NULL,
                           form = NULL,
-                          hash = NULL,
                           original_formula = NULL,
                           ptr = NULL,
                           update_ptr = function(){
                             private$ptr <- Linpred__new(self$formula,
                                                   as.matrix(self$data),
                                                   colnames(self$data))
-                          },
-                          hash_do = function(){
-                            digest::digest(c(self$formula,
-                                             self$data,
-                                             self$parameters))
                           },
                           generate = function(verbose = FALSE){
                             self$formula <- private$original_formula
@@ -264,7 +217,6 @@ MeanFunction <- R6::R6Class("MeanFunction",
                             self$formula <- gsub("\\+\\([^ \\+]\\|.*\\)","",self$formula,perl = T)
                             private$update_ptr()
                             private$genX()
-                            private$hash <- private$hash_do()
                           },
                           genX = function(){
                             self$X <- Linpred__x(private$ptr)

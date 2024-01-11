@@ -52,7 +52,6 @@ The matrices X and Z both have n rows, where n is the number of observations in 
 Using \code{update_parameters()} is the preferred way of updating the parameters of the
 mean or covariance objects as opposed to direct assignment, e.g. \code{self$covariance$parameters <- c(...)}.
 The function calls check functions to automatically update linked matrices with the new parameters.
-If using direct assignment, call \code{self$check()} afterwards.
 
 \strong{MCMCML}
 Fits generalised linear mixed models using one of three algorithms: Markov Chain Newton
@@ -71,7 +70,8 @@ parameter estimates.
 The accuracy of the algorithm depends on the user specified tolerance. For higher levels of
 tolerance, larger numbers of MCMC samples are likely need to sufficiently reduce Monte Carlo error.
 
-Options for the MCMC sampler are set by changing the values in \code{self$mcmc_options}.
+Options for the MCMC sampler are set by changing the values in \code{self$mcmc_options}. The information printed to the console
+during model fitting can be controlled with the \code{self$set_trace()} function.
 
 To provide weights for the model fitting, store them in self$weights. To set the number of
 trials for binomial models, set self$trials.
@@ -82,7 +82,8 @@ the covariance matrix is approximated using the first order approximation based 
 quasilikelihood proposed by Breslow and Clayton (1993). The marginal mean in this approximation
 can be further adjusted following the proposal of Zeger et al (1988), use the member function \code{use_attenuated()} in this
 class, see \link[glmmrBase]{Model}. To provide weights for the model fitting, store them in self$weights. To
-set the number of trials for binomial models, set self$trials.
+set the number of trials for binomial models, set self$trials. To control the information printed to the console
+during model fitting use the \code{self$set_trace()} function.
 }
 \examples{
 
@@ -129,10 +130,9 @@ des <- Model$new(
 
 #an example of a spatial grid with two time points
 df <- nelder(~ (x(10)*y(10))*t(2))
-spt_design <- Model$new(covariance = list( formula = ~(1|ar0(t)*fexp(x,y))),
-                         mean = list(formula = ~ 1),
-                         data = df,
-                         family = stats::gaussian())
+spt_design <- Model$new(formula = ~ 1 + (1|ar0(t)*fexp(x,y)),
+                        data = df,
+                        family = stats::gaussian())
 
 ## ------------------------------------------------
 ## Method `Model$sim_data`
@@ -157,32 +157,6 @@ des <- Model$new(
 ysim <- des$sim_data()
 
 ## ------------------------------------------------
-## Method `Model$check`
-## ------------------------------------------------
-
-\dontshow{
-setParallel(FALSE) # for the CRAN check
-}
-df <- nelder(~(cl(10)*t(5)) > ind(10))
-df$int <- 0
-df[df$cl > 5, 'int'] <- 1
-des <- Model$new(
-  covariance = list(
-    formula = ~ (1|gr(cl)*ar0(t)),
-    parameters = c(0.05,0.8)),
-  mean = list(
-    formula = ~ factor(t) + int - 1,
-    parameters = c(rep(0,5),0.6)),
-  data = df,
-  family = stats::binomial()
-)
-des$check() #does nothing
-des$covariance$parameters <- c(0.1,0.9)
-des$check() #updates
-des$mean$parameters <- c(rnorm(5),0.1)
-des$check() #updates
-
-## ------------------------------------------------
 ## Method `Model$update_parameters`
 ## ------------------------------------------------
 
@@ -193,10 +167,7 @@ df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
-  covariance = list(
-    formula = ~ (1|gr(cl)*ar0(t))),
-  mean = list(
-    formula = ~ factor(t) + int - 1),
+  formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar0(t)),
   data = df,
   family = stats::binomial()
 )
@@ -213,12 +184,9 @@ df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
-  covariance = list(
-    formula = ~ (1|gr(cl)) + (1|gr(cl,t)),
-    parameters = c(0.05,0.1)),
-  mean = list(
-    formula = ~ factor(t) + int - 1,
-    parameters = c(rep(0,5),0.6)),
+  formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
+  covariance = c(0.05,0.1),
+  mean = c(rep(0,5),0.6),
   data = df,
   family = stats::gaussian(),
   var_par = 1
@@ -238,8 +206,8 @@ df[df$cl > 3, 'int'] <- 1
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
   formula= ~ factor(t) + int - 1 +(1|gr(cl)*ar0(t)),
-  covariance = list(parameters = c(0.05,0.7)),
-  mean = list(parameters = c(rep(0,5),0.2)),
+  covariance = c(0.05,0.7),
+  mean = c(rep(0,5),0.2),
   data = df,
   family = gaussian(),
   var_par = 1
@@ -272,8 +240,8 @@ df[df$cl > 3, 'int'] <- 1
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
   formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar0(t)),
-  covariance = list( parameters = c(0.05,0.7)),
-  mean = list(parameters = c(rep(0,5),-0.2)),
+  covariance = c(0.05,0.7),
+  mean = c(rep(0,5),-0.2),
   data = df,
   family = stats::binomial()
 )
@@ -345,13 +313,12 @@ require larger numbers of steps and so is slower. Smaller numbers are likely req
 \item \href{#method-Model-print}{\code{Model$print()}}
 \item \href{#method-Model-n}{\code{Model$n()}}
 \item \href{#method-Model-subset_rows}{\code{Model$subset_rows()}}
-\item \href{#method-Model-subset_cols}{\code{Model$subset_cols()}}
 \item \href{#method-Model-sim_data}{\code{Model$sim_data()}}
-\item \href{#method-Model-check}{\code{Model$check()}}
 \item \href{#method-Model-update_parameters}{\code{Model$update_parameters()}}
 \item \href{#method-Model-information_matrix}{\code{Model$information_matrix()}}
 \item \href{#method-Model-sandwich}{\code{Model$sandwich()}}
-\item \href{#method-Model-kenward_roger}{\code{Model$kenward_roger()}}
+\item \href{#method-Model-small_sample_correction}{\code{Model$small_sample_correction()}}
+\item \href{#method-Model-box}{\code{Model$box()}}
 \item \href{#method-Model-power}{\code{Model$power()}}
 \item \href{#method-Model-w_matrix}{\code{Model$w_matrix()}}
 \item \href{#method-Model-dh_deta}{\code{Model$dh_deta()}}
@@ -366,6 +333,8 @@ require larger numbers of steps and so is slower. Smaller numbers are likely req
 \item \href{#method-Model-log_likelihood}{\code{Model$log_likelihood()}}
 \item \href{#method-Model-calculator_instructions}{\code{Model$calculator_instructions()}}
 \item \href{#method-Model-marginal}{\code{Model$marginal()}}
+\item \href{#method-Model-update_y}{\code{Model$update_y()}}
+\item \href{#method-Model-set_trace}{\code{Model$set_trace()}}
 \item \href{#method-Model-clone}{\code{Model$clone()}}
 }
 }
@@ -468,8 +437,7 @@ Create a new Model object
   var_par = NULL,
   offset = NULL,
   weights = NULL,
-  trials = NULL,
-  verbose = TRUE
+  trials = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -504,8 +472,6 @@ objects, or as members of the list of arguments to \code{mean}. Current accepts 
 
 \item{\code{trials}}{(Optional) For binomial family models, the number of trials for each observation. If it is not set, then it will
 default to 1 (a bernoulli model).}
-
-\item{\code{verbose}}{Logical indicating whether to provide detailed output}
 }
 \if{html}{\out{</div>}}
 }
@@ -553,10 +519,9 @@ des <- Model$new(
 
 #an example of a spatial grid with two time points
 df <- nelder(~ (x(10)*y(10))*t(2))
-spt_design <- Model$new(covariance = list( formula = ~(1|ar0(t)*fexp(x,y))),
-                         mean = list(formula = ~ 1),
-                         data = df,
-                         family = stats::gaussian())
+spt_design <- Model$new(formula = ~ 1 + (1|ar0(t)*fexp(x,y)),
+                        data = df,
+                        family = stats::gaussian())
 }
 \if{html}{\out{</div>}}
 
@@ -617,29 +582,7 @@ other rows will be removed from the mean function and covariance
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-The function updates the object and nothing is returned
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Model-subset_cols"></a>}}
-\if{latex}{\out{\hypertarget{method-Model-subset_cols}{}}}
-\subsection{Method \code{subset_cols()}}{
-Subsets the columns of the design
-
-Removes the specified columns from the linked mean function object's X matrix.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$subset_cols(index)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{index}}{Integer or vector of integers specifying the indexes of the columns to keep}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The function updates the object and nothing is returned
+The function updates the object and nothing is returned.
 }
 }
 \if{html}{\out{<hr>}}
@@ -693,58 +636,6 @@ ysim <- des$sim_data()
 
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Model-check"></a>}}
-\if{latex}{\out{\hypertarget{method-Model-check}{}}}
-\subsection{Method \code{check()}}{
-Checks for any changes in linked objects and updates.
-
-Checks for any changes in any object and updates all linked objects if
-any are detected. Generally not required by the user.
-This function will be deprecated in future versions as checking is automatic.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$check(verbose = TRUE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{verbose}}{Logical indicating whether to report if any updates are made, defaults to TRUE}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-Linked objects are updated by nothing is returned
-}
-\subsection{Examples}{
-\if{html}{\out{<div class="r example copy">}}
-\preformatted{\dontshow{
-setParallel(FALSE) # for the CRAN check
-}
-df <- nelder(~(cl(10)*t(5)) > ind(10))
-df$int <- 0
-df[df$cl > 5, 'int'] <- 1
-des <- Model$new(
-  covariance = list(
-    formula = ~ (1|gr(cl)*ar0(t)),
-    parameters = c(0.05,0.8)),
-  mean = list(
-    formula = ~ factor(t) + int - 1,
-    parameters = c(rep(0,5),0.6)),
-  data = df,
-  family = stats::binomial()
-)
-des$check() #does nothing
-des$covariance$parameters <- c(0.1,0.9)
-des$check() #updates
-des$mean$parameters <- c(rnorm(5),0.1)
-des$check() #updates
-}
-\if{html}{\out{</div>}}
-
-}
-
-}
-\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-Model-update_parameters"></a>}}
 \if{latex}{\out{\hypertarget{method-Model-update_parameters}{}}}
 \subsection{Method \code{update_parameters()}}{
@@ -761,8 +652,6 @@ Updates the parameters of the mean function and/or the covariance function
 \item{\code{cov.pars}}{(Optional) Vector of new covariance function(s) parameters}
 
 \item{\code{var.par}}{(Optional) A scalar value for var_par}
-
-\item{\code{verbose}}{Logical indicating whether to provide more detailed feedback}
 }
 \if{html}{\out{</div>}}
 }
@@ -775,10 +664,7 @@ df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
-  covariance = list(
-    formula = ~ (1|gr(cl)*ar0(t))),
-  mean = list(
-    formula = ~ factor(t) + int - 1),
+  formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar0(t)),
   data = df,
   family = stats::binomial()
 )
@@ -824,16 +710,51 @@ A PxP matrix
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Model-kenward_roger"></a>}}
-\if{latex}{\out{\hypertarget{method-Model-kenward_roger}{}}}
-\subsection{Method \code{kenward_roger()}}{
-Returns the bias-corrected variance-covariance matrix for the fixed effect parameters.
+\if{html}{\out{<a id="method-Model-small_sample_correction"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-small_sample_correction}{}}}
+\subsection{Method \code{small_sample_correction()}}{
+Returns a small sample correction. The option "KR" returns the Kenward-Roger bias-corrected variance-covariance matrix
+for the fixed effect parameters and degrees of freedom. Option "KR2"  returns an improved correction given
+in Kenward & Roger (2009) \url{doi:j.csda.2008.12.013}. Note, that the corrected/improved version is invariant
+under reparameterisation of the covariance, and it will also make no difference if the covariance is linear
+in parameters. Exchangeable covariance structures in this package (i.e. \code{gr()}) are parameterised in terms of
+the variance rather than standard deviation, so the results will be unaffected. Option "sat" returns the "Satterthwaite"
+correction, which only includes corrected degrees of freedom, along with the GLS standard errors.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$kenward_roger()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$small_sample_correction(type)}\if{html}{\out{</div>}}
 }
 
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Either "KR", "KR2", or "sat", see description.}
+}
+\if{html}{\out{</div>}}
+}
 \subsection{Returns}{
 A PxP matrix
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-box"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-box}{}}}
+\subsection{Method \code{box()}}{
+Returns the inferential statistics (F-stat, p-value) for a modified Box correction \url{doi:10.1002/sim.4072} for
+Gaussian-identity models.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$box(y)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{y}}{Optional. If provided, will update the vector of outcome data. Otherwise it will use the data from
+the previous model fit.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A data frame.
 }
 }
 \if{html}{\out{<hr>}}
@@ -877,12 +798,9 @@ df <- nelder(~(cl(10)*t(5)) > ind(10))
 df$int <- 0
 df[df$cl > 5, 'int'] <- 1
 des <- Model$new(
-  covariance = list(
-    formula = ~ (1|gr(cl)) + (1|gr(cl,t)),
-    parameters = c(0.05,0.1)),
-  mean = list(
-    formula = ~ factor(t) + int - 1,
-    parameters = c(rep(0,5),0.6)),
+  formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
+  covariance = c(0.05,0.1),
+  mean = c(rep(0,5),0.6),
   data = df,
   family = stats::gaussian(),
   var_par = 1
@@ -950,17 +868,18 @@ Markov Chain Monte Carlo Maximum Likelihood  model fitting
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Model$MCML(
   y,
-  method = "mcnr",
+  method = "mcem",
   sim.lik.step = FALSE,
-  verbose = TRUE,
   tol = 0.01,
   max.iter = 30,
   se = "gls",
-  sparse = FALSE,
   usestan = TRUE,
   se.theta = TRUE,
+  algo = ifelse(self$mean$any_nonlinear(), 2, 3),
   lower.bound = NULL,
-  upper.bound = NULL
+  upper.bound = NULL,
+  lower.bound.theta = NULL,
+  upper.bound.theta = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -974,19 +893,17 @@ Markov Chain Monte Carlo Maximum Likelihood  model fitting
 \item{\code{sim.lik.step}}{Logical. Either TRUE (conduct a simulated likelihood step at the end of the algorithm), or FALSE (does
 not do this step), defaults to FALSE.}
 
-\item{\code{verbose}}{Logical indicating whether to provide detailed output, defaults to TRUE.}
-
 \item{\code{tol}}{Numeric value, tolerance of the MCML algorithm, the maximum difference in parameter estimates
 between iterations at which to stop the algorithm.}
 
 \item{\code{max.iter}}{Integer. The maximum number of iterations of the MCML algorithm.}
 
-\item{\code{se}}{String. Type of standard error to return. Options are "gls" for GLS standard errors (the default),
-"robust" for Huber robust sandwich estimator, "kr" for Kenward-Roger bias corrected standard errors, "bw" to use
-GLS standard errors with a between-within correction to the degrees of freedom, "bwrobust" to use robust
+\item{\code{se}}{String. Type of standard error and/or inferential statistics to return. Options are "gls" for GLS standard errors (the default),
+"robust" for robust standard errors, "kr" for original Kenward-Roger bias corrected standard errors,
+"kr2" for the improved Kenward-Roger correction, "sat" for Satterthwaite degrees of freedom correction (this is the same
+degrees of freedom correction as Kenward-Roger, but with GLS standard errors), "box" to use a modified Box correction (does not return confidence intervals),
+"bw" to use GLS standard errors with a between-within correction to the degrees of freedom, "bwrobust" to use robust
 standard errors with between-within correction to the degrees of freedom.}
-
-\item{\code{sparse}}{Logical indicating whether to use sparse matrix methods}
 
 \item{\code{usestan}}{Logical whether to use Stan (through the package \code{cmdstanr}) for the MCMC sampling. If FALSE then
 the internal Hamiltonian Monte Carlo sampler will be used instead. We recommend Stan over the internal sampler as
@@ -996,9 +913,16 @@ covariance functions.}
 \item{\code{se.theta}}{Logical. Whether to calculate the standard errors for the covariance parameters. This step is a slow part
 of the calculation, so can be disabled if required in larger models. Has no effect for Kenward-Roger standard errors.}
 
+\item{\code{algo}}{Integer. 1 = L-BFGS for beta and BOBYQA for theta, 2 = BOBYQA for both, 3 = L-BFGS for both (default). The L-BFGS algorithm
+may perform poorly with some covariance structures, in this case select 1 or 2, or apply an upper bound.}
+
 \item{\code{lower.bound}}{Optional. Vector of lower bounds for the fixed effect parameters. To apply bounds use MCEM.}
 
 \item{\code{upper.bound}}{Optional. Vector of upper bounds for the fixed effect parameters. To apply bounds use MCEM.}
+
+\item{\code{lower.bound.theta}}{Optional. Vector of lower bounds for the covariance parameters (default is 0; negative values will cause an error)}
+
+\item{\code{upper.bound.theta}}{Optional. Vector of upper bounds for the covariance parameters.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1016,8 +940,8 @@ df[df$cl > 3, 'int'] <- 1
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
   formula= ~ factor(t) + int - 1 +(1|gr(cl)*ar0(t)),
-  covariance = list(parameters = c(0.05,0.7)),
-  mean = list(parameters = c(rep(0,5),0.2)),
+  covariance = c(0.05,0.7),
+  mean = c(rep(0,5),0.2),
   data = df,
   family = gaussian(),
   var_par = 1
@@ -1049,14 +973,16 @@ Maximum Likelihood model fitting with Laplace Approximation
 \if{html}{\out{<div class="r">}}\preformatted{Model$LA(
   y,
   start,
-  method = "nr",
-  verbose = FALSE,
+  method = "nloptim",
   se = "gls",
   max.iter = 40,
   tol = 1e-04,
   se.theta = TRUE,
+  algo = ifelse(self$mean$any_nonlinear(), 2, 1),
   lower.bound = NULL,
-  upper.bound = NULL
+  upper.bound = NULL,
+  lower.bound.theta = NULL,
+  upper.bound.theta = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -1069,12 +995,13 @@ Maximum Likelihood model fitting with Laplace Approximation
 
 \item{\code{method}}{String. Either "nloptim" for non-linear optimisation, or "nr" for Newton-Raphson (default) algorithm}
 
-\item{\code{verbose}}{logical indicating whether to provide detailed algorithm feedback (default is TRUE).}
-
-\item{\code{se}}{String. Type of standard error to return. Options are "gls" for GLS standard errors (the default),
-"robust" for Huber robust sandwich estimator, "kr" for Kenward-Roger bias corrected standard errors, "bw" to use
-GLS standard errors with a between-within correction to the degrees of freedom, "bwrobust" to use robust
-standard errors with between-within correction to the degrees of freedom.}
+\item{\code{se}}{String. Type of standard error and/or inferential statistics to return. Options are "gls" for GLS standard errors (the default),
+"robust" for robust standard errors, "kr" for original Kenward-Roger bias corrected standard errors,
+"kr2" for the improved Kenward-Roger correction, "sat" for Satterthwaite degrees of freedom correction (this is the same
+degrees of freedom correction as Kenward-Roger, but with GLS standard errors)"box" to use a modified Box correction (does not return confidence intervals),
+"bw" to use GLS standard errors with a between-within correction to the degrees of freedom, "bwrobust" to use robust
+standard errors with between-within correction to the degrees of freedom.
+Note that Kenward-Roger assumes REML estimates, which are not currently provided by this function.}
 
 \item{\code{max.iter}}{Maximum number of algorithm iterations, default 20.}
 
@@ -1083,9 +1010,15 @@ standard errors with between-within correction to the degrees of freedom.}
 \item{\code{se.theta}}{Logical. Whether to calculate the standard errors for the covariance parameters. This step is a slow part
 of the calculation, so can be disabled if required in larger models. Has no effect for Kenward-Roger standard errors.}
 
+\item{\code{algo}}{Integer. 1 = L-BFGS for beta-u and BOBYQA for theta (default), 2 = BOBYQA for both.}
+
 \item{\code{lower.bound}}{Optional. Vector of lower bounds for the fixed effect parameters. To apply bounds use nloptim.}
 
 \item{\code{upper.bound}}{Optional. Vector of upper bounds for the fixed effect parameters. To apply bounds use nloptim.}
+
+\item{\code{lower.bound.theta}}{Optional. Vector of lower bounds for the covariance parameters.}
+
+\item{\code{upper.bound.theta}}{Optional. Vector of upper bounds for the covariance parameters.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1105,8 +1038,8 @@ df[df$cl > 3, 'int'] <- 1
 # specify parameter values in the call for the data simulation below
 des <- Model$new(
   formula = ~ factor(t) + int - 1 + (1|gr(cl)*ar0(t)),
-  covariance = list( parameters = c(0.05,0.7)),
-  mean = list(parameters = c(rep(0,5),-0.2)),
+  covariance = c(0.05,0.7),
+  mean = c(rep(0,5),-0.2),
   data = df,
   family = stats::binomial()
 )
@@ -1125,13 +1058,16 @@ fit1 <- des$LA(y = ysim)
 Set whether to use sparse matrix methods for model calculations and fitting.
 By default the model does not use sparse matrix methods.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$sparse(sparse = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$sparse(sparse = TRUE, amd = TRUE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{sparse}}{Logical indicating whether to use sparse matrix methods}
+
+\item{\code{amd}}{Logical indicating whether to use and Approximate Minimum Degree algorithm to calculate an efficient permutation matrix so
+that the Cholesky decomposition of PAP^T is calculated rather than A.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1145,20 +1081,16 @@ None, called for effects
 \subsection{Method \code{mcmc_sample()}}{
 Generate an MCMC sample of the random effects
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$mcmc_sample(y, usestan = TRUE, verbose = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$mcmc_sample(usestan = TRUE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{y}}{Numeric vector of outcome data}
-
 \item{\code{usestan}}{Logical whether to use Stan (through the package \code{cmdstanr}) for the MCMC sampling. If FALSE then
 the internal Hamiltonian Monte Carlo sampler will be used instead. We recommend Stan over the internal sampler as
 it generally produces a larger number of effective samplers per unit time, especially for more complex
 covariance functions.}
-
-\item{\code{verbose}}{Logical indicating whether to provide detailed output to the console}
 }
 \if{html}{\out{</div>}}
 }
@@ -1332,7 +1264,8 @@ of the stored parameters and data variables see the member function \code{names(
 provide specific values, or \code{average} to average over the random effects.}
 
 \item{\code{se}}{String. Type of standard error to use, either \code{GLS} for the GLS standard errors, \code{KR} for
-Kenward-Roger estimated standard errors, or \code{robust} to use a robust sandwich estimator.}
+Kenward-Roger estimated standard errors, \code{KR2} for the improved Kenward-Roger correction (see \code{small_sample_correction()}),
+or \code{robust} to use a robust sandwich estimator.}
 
 \item{\code{at}}{Optional. A vector of strings naming the fixed effects for which a specified value is given.}
 
@@ -1340,16 +1273,59 @@ Kenward-Roger estimated standard errors, or \code{robust} to use a robust sandwi
 
 \item{\code{average}}{Optional. A vector of strings naming the fixed effects which will be averaged over.}
 
+\item{\code{xvals}}{Optional. A vector specifying the values of \code{a} and \code{b} for \code{diff} and \code{ratio}. The default is (1,0).}
+
 \item{\code{atvals}}{Optional. A vector specifying the values of fixed effects specified in \code{at} (in the same order).}
 
 \item{\code{revals}}{Optional. If \code{re="at"} then this argument provides a vector of values for the random effects.}
-
-\item{\code{xvals.}}{Optional. A vector specifying the values of \code{a} and \code{b} for \code{diff} and \code{ratio}. The default is (1,0).}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
 A named vector with elements \code{margin} specifying the point estimate and \code{se} giving the standard error.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-update_y"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-update_y}{}}}
+\subsection{Method \code{update_y()}}{
+Updates the outcome data y
+
+Some functions require outcome data, which is by default set to all zero if no model fitting function
+has been run. This function can update the interval y data.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$update_y(y)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{y}}{Vector of outcome data}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None. Called for effects
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-set_trace"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-set_trace}{}}}
+\subsection{Method \code{set_trace()}}{
+Controls the information printed to the console for other functions.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$set_trace(trace)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{trace}}{Integer, either 0 = no information, 1 = some information, 2 = all information}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None. Called for effects.
 }
 }
 \if{html}{\out{<hr>}}

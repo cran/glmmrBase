@@ -89,39 +89,7 @@ Covariance <- R6::R6Class("Covariance",
                           if(!is.null(parameters)){
                             self$parameters <- parameters
                           }
-                          
-                          if(allset){
-                            private$cov_form()
-                          } else {
-                            private$hash <- digest::digest(1)
-                          }
-
-                        },
-                        #' @description
-                        #' Check if anything has changed and update matrices if so.
-                        #' @param verbose Logical whether to report if any changes detected.
-                        #' @return NULL
-                        #' @examples
-                        #' \dontshow{
-                        #' setParallel(FALSE) # for the CRAN check
-                        #' }
-                        #' df <- nelder(~(cl(5)*t(5)) > ind(5))
-                        #' cov <- Covariance$new(formula = ~(1|gr(cl)*ar0(t)),
-                        #'                       parameters = c(0.03,0.8),
-                        #'                       data= df)
-                        #' cov$parameters <- c(0.25,0.1)
-                        #' cov$check(verbose=FALSE)
-                        check = function(verbose=TRUE){
-                          if(is.null(private$model_ptr)){
-                            new_hash <- private$hash_do()
-                            if(private$hash != new_hash){
-                              private$cov_form()
-                              if(verbose)message(paste0("Generating the ",nrow(self$Z)," x ",ncol(self$Z)," matrix Z"))
-                              if(verbose)message(paste0("Generating the ",nrow(self$D)," x ",ncol(self$D)," matrix D"))
-                              private$genD()
-                            } 
-                            invisible(self)
-                          }
+                          if(allset) private$cov_form()
                         },
                         #' @description
                         #' Updates the covariance parameters
@@ -130,7 +98,6 @@ Covariance <- R6::R6Class("Covariance",
                         #' Using `update_parameters()` is the preferred way of updating the parameters of the
                         #' mean or covariance objects as opposed to direct assignment, e.g. `self$parameters <- c(...)`.
                         #' The function calls check functions to automatically update linked matrices with the new parameters.
-                        #' If using direct assignment, call `self$check()` afterwards.
                         #'
                         #' @param parameters A vector of parameters for the covariance function(s). See Details.
                         update_parameters = function(parameters){
@@ -180,12 +147,12 @@ Covariance <- R6::R6Class("Covariance",
                         #' cov$subset(1:100)
                         subset = function(index){
                           self$data <- self$data[index,]
-                          self$check()
+                          if(is.null(private$model_ptr))private$cov_form()
                         },
                         #' @description
                         #' Returns the Cholesky decomposition of the covariance matrix D
                         #' @return A matrix
-                        get_chol_D = function(){
+                        chol_D = function(){
                           if(is.null(private$model_ptr)){
                             return(Matrix::Matrix(Covariance__D_chol(private$ptr,private$type)))
                           } else {
@@ -222,16 +189,17 @@ Covariance <- R6::R6Class("Covariance",
                           return(re)
                         },
                         #' @description
-                        #' If this function is called then sparse matrix methods will be used for calculations
-                        #' involving D
+                        #' If this function is called then sparse matrix methods will be used for calculations involving D
                         #' @param sparse Logical. Whether to use sparse methods (TRUE) or not (FALSE)
+                        #' @param amd Logical indicating whether to use and Approximate Minimum Degree algorithm to calculate an efficient permutation matrix so 
+                        #' that the Cholesky decomposition of PAP^T is calculated rather than A.
                         #' @return None. Called for effects.
-                        sparse = function(sparse = TRUE){
+                        sparse = function(sparse = TRUE, amd = TRUE){
                           if(sparse){
                             if(is.null(private$model_ptr)){
-                              Covariance__make_sparse(private$ptr,private$type)
+                              Covariance__make_sparse(private$ptr,amd,private$type)
                             } else {
-                              Model__make_sparse(private$model_ptr,private$type)
+                              Model__make_sparse(private$model_ptr,amd,private$type)
                             }
                           } else {
                             if(is.null(private$model_ptr)){
@@ -330,10 +298,6 @@ Covariance <- R6::R6Class("Covariance",
                         }
                       ),
                       private = list(
-                        hash = NULL,
-                        hash_do = function(){
-                          c(digest::digest(c(self$data,self$formula,self$parameters)))
-                        },
                         parcount = NULL,
                         ptr = NULL,
                         model_ptr = NULL,
@@ -393,7 +357,6 @@ Covariance <- R6::R6Class("Covariance",
                           D <- Covariance__D(private$ptr,private$type)
                           if(update){
                             self$D <- Matrix::Matrix(D)
-                            private$hash <- private$hash_do()
                           } else {
                             return(D)
                           }

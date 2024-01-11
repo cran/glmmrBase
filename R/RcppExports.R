@@ -61,8 +61,8 @@ Covariance__simulate_re <- function(xp, type_ = 0L) {
     .Call(`_glmmrBase_Covariance__simulate_re`, xp, type_)
 }
 
-Covariance__make_sparse <- function(xp, type_ = 0L) {
-    invisible(.Call(`_glmmrBase_Covariance__make_sparse`, xp, type_))
+Covariance__make_sparse <- function(xp, amd = TRUE, type_ = 0L) {
+    invisible(.Call(`_glmmrBase_Covariance__make_sparse`, xp, amd, type_))
 }
 
 Covariance__make_dense <- function(xp, type_ = 0L) {
@@ -201,12 +201,16 @@ Model__get_W <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__get_W`, xp, type)
 }
 
-Model__set_lower_bound <- function(xp, bound_, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__set_lower_bound`, xp, bound_, type))
+Model__set_direct_control <- function(xp, direct = FALSE, direct_range_beta = 3.0, max_iter = 100L, epsilon = 1e-4, select_one = TRUE, trisect_once = FALSE, max_eval = 0L, mrdirect = FALSE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__set_direct_control`, xp, direct, direct_range_beta, max_iter, epsilon, select_one, trisect_once, max_eval, mrdirect, type))
 }
 
-Model__set_upper_bound <- function(xp, bound_, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__set_upper_bound`, xp, bound_, type))
+Model__set_lbfgs_control <- function(xp, g_epsilon = 1e-8, past = 3L, delta = 1e-8, max_linesearch = 64L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__set_lbfgs_control`, xp, g_epsilon, past, delta, max_linesearch, type))
+}
+
+Model__set_bound <- function(xp, bound_, beta = TRUE, lower = TRUE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__set_bound`, xp, bound_, beta, lower, type))
 }
 
 Model__print_instructions <- function(xp, linpred, loglik, type = 0L) {
@@ -233,32 +237,44 @@ Model__log_likelihood <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__log_likelihood`, xp, type)
 }
 
-Model__ml_theta <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__ml_theta`, xp, type))
-}
-
 Model__cov_set_nn <- function(xp, nn) {
     invisible(.Call(`_glmmrBase_Model__cov_set_nn`, xp, nn))
 }
 
-Model__ml_beta <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__ml_beta`, xp, type))
+Model__test_lbfgs <- function(xp, x) {
+    invisible(.Call(`_glmmrBase_Model__test_lbfgs`, xp, x))
 }
 
-Model__ml_all <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__ml_all`, xp, type))
+Model__test_lbfgs_theta <- function(xp, x) {
+    invisible(.Call(`_glmmrBase_Model__test_lbfgs_theta`, xp, x))
 }
 
-Model__laplace_ml_beta_u <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__laplace_ml_beta_u`, xp, type))
+Model__test_lbfgs_laplace <- function(xp, x) {
+    invisible(.Call(`_glmmrBase_Model__test_lbfgs_laplace`, xp, x))
 }
 
-Model__laplace_ml_theta <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__laplace_ml_theta`, xp, type))
+Model__ml_beta <- function(xp, algo = 0L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__ml_beta`, xp, algo, type))
 }
 
-Model__laplace_ml_beta_theta <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__laplace_ml_beta_theta`, xp, type))
+Model__ml_theta <- function(xp, algo = 0L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__ml_theta`, xp, algo, type))
+}
+
+Model__ml_all <- function(xp, algo = 0L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__ml_all`, xp, algo, type))
+}
+
+Model__laplace_ml_beta_u <- function(xp, algo = 0L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__laplace_ml_beta_u`, xp, algo, type))
+}
+
+Model__laplace_ml_theta <- function(xp, algo = 0L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__laplace_ml_theta`, xp, algo, type))
+}
+
+Model__laplace_ml_beta_theta <- function(xp, algo = 0L, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__laplace_ml_beta_theta`, xp, algo, type))
 }
 
 Model__nr_beta <- function(xp, type = 0L) {
@@ -369,10 +385,6 @@ Model__ZL <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__ZL`, xp, type)
 }
 
-Model__hessian_numerical <- function(xp, tol = 1e-4, type = 0L) {
-    .Call(`_glmmrBase_Model__hessian_numerical`, xp, tol, type)
-}
-
 Model__xb <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__xb`, xp, type)
 }
@@ -421,8 +433,8 @@ Model__mcmc_set_target_accept <- function(xp, target_, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__mcmc_set_target_accept`, xp, target_, type))
 }
 
-Model__make_sparse <- function(xp, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__make_sparse`, xp, type))
+Model__make_sparse <- function(xp, amd = TRUE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__make_sparse`, xp, amd, type))
 }
 
 Model__make_dense <- function(xp, type = 0L) {
@@ -451,6 +463,14 @@ Model__infomat_theta <- function(xp, type = 0L) {
 
 Model__kenward_roger <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__kenward_roger`, xp, type)
+}
+
+Model__small_sample_correction <- function(xp, ss_type = 0L, type = 0L) {
+    .Call(`_glmmrBase_Model__small_sample_correction`, xp, ss_type, type)
+}
+
+Model__box <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__box`, xp, type)
 }
 
 Model__cov_deriv <- function(xp, type = 0L) {

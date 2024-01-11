@@ -2,7 +2,7 @@
 
 namespace Rcpp {
 template<>
-SEXP wrap(const vector_matrix& x){
+SEXP wrap(const VectorMatrix& x){
   return Rcpp::wrap(Rcpp::List::create(
       Rcpp::Named("vec") = Rcpp::wrap(x.vec),
       Rcpp::Named("mat") = Rcpp::wrap(x.mat)
@@ -10,7 +10,7 @@ SEXP wrap(const vector_matrix& x){
 }
 
 template<>
-SEXP wrap(const matrix_matrix& x){
+SEXP wrap(const MatrixMatrix& x){
   return Rcpp::wrap(Rcpp::List::create(
       Rcpp::Named("mat1") = Rcpp::wrap(x.mat1),
       Rcpp::Named("mat2") = Rcpp::wrap(x.mat2),
@@ -26,8 +26,8 @@ template<typename T1, typename T2> SEXP wrap( const std::pair<T1,T2>& _v ) {
   );
 };
 
-template<>
-SEXP wrap(const kenward_data& x){
+template<glmmr::SE corr>
+SEXP wrap(const CorrectionData<corr>& x){
   return Rcpp::wrap(Rcpp::List::create(
       Rcpp::Named("vcov_beta") = Rcpp::wrap(x.vcov_beta),
       Rcpp::Named("vcov_theta") = Rcpp::wrap(x.vcov_theta),
@@ -35,6 +35,25 @@ SEXP wrap(const kenward_data& x){
   ));
 }
 
+template<>
+SEXP wrap(const CorrectionData<glmmr::SE::KRBoth>& x){
+  return Rcpp::wrap(Rcpp::List::create(
+      Rcpp::Named("vcov_beta") = Rcpp::wrap(x.vcov_beta),
+      Rcpp::Named("vcov_beta_second") = Rcpp::wrap(x.vcov_beta_second),
+      Rcpp::Named("vcov_theta") = Rcpp::wrap(x.vcov_theta),
+      Rcpp::Named("dof") = Rcpp::wrap(x.dof)
+  ));
+}
+
+template<>
+SEXP wrap(const BoxResults& x){
+  return Rcpp::wrap(Rcpp::List::create(
+      Rcpp::Named("dof") = Rcpp::wrap(x.dof),
+      Rcpp::Named("scale") = Rcpp::wrap(x.scale),
+      Rcpp::Named("test_stat") = Rcpp::wrap(x.test_stat),
+      Rcpp::Named("p_value") = Rcpp::wrap(x.p_value)
+  ));
+}
 
 
 }
@@ -44,7 +63,7 @@ using namespace Rcpp;
 // [[Rcpp::export]]
 SEXP Covariance__submatrix(SEXP xp, int i){
   XPtr<nngp> ptr(xp);
-  vector_matrix result = ptr->submatrix(i);
+  VectorMatrix result = ptr->submatrix(i);
   return wrap(result);
 }
 
@@ -181,11 +200,11 @@ void Model__mcmc_set_target_accept(SEXP xp, SEXP target_, int type = 0){
 }
 
 // [[Rcpp::export]]
-void Model__make_sparse(SEXP xp, int type = 0){
+void Model__make_sparse(SEXP xp, bool amd = true, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   auto functor = overloaded {
     [](int) {}, 
-    [](auto ptr){ptr->model.make_covariance_sparse();}
+    [&](auto ptr){ptr->model.make_covariance_sparse(amd);}
   };
   std::visit(functor,model.ptr);
 }
@@ -230,7 +249,7 @@ SEXP Model__hess_and_grad(SEXP xp, int type = 0){
     [](auto ptr){return returnType(ptr->matrix.hess_and_grad());}
   };
   auto S = std::visit(functor,model.ptr);
-  return wrap(std::get<matrix_matrix>(S));
+  return wrap(std::get<MatrixMatrix>(S));
 }
 
 // [[Rcpp::export]]
@@ -260,10 +279,75 @@ SEXP Model__kenward_roger(SEXP xp, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   auto functor = overloaded {
     [](int) {  return returnType(0);}, 
-    [](auto ptr){return returnType(ptr->matrix.kenward_roger());}
+    [](auto ptr){return returnType(ptr->matrix.template small_sample_correction<glmmr::SE::KR>());}
   };
   auto S = std::visit(functor,model.ptr);
-  return wrap(std::get<kenward_data>(S));
+  return wrap(std::get<CorrectionData<glmmr::SE::KR> >(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__small_sample_correction(SEXP xp, int ss_type = 0, int type = 0){
+  using namespace glmmr;
+  glmmrType model(xp,static_cast<Type>(type));
+  SE corr = static_cast<SE>(ss_type);
+  switch(corr){
+    case SE::KR:
+      {
+        auto functor = overloaded {
+          [](int) {  return returnType(0);}, 
+          [&](auto ptr){return returnType(ptr->matrix.template small_sample_correction<SE::KR>());}
+        };
+        auto S = std::visit(functor,model.ptr);
+        return wrap(std::get<CorrectionData<SE::KR> >(S));
+        break;
+      }
+    case SE::KR2:
+    {
+      auto functor = overloaded {
+        [](int) {  return returnType(0);}, 
+        [&](auto ptr){return returnType(ptr->matrix.template small_sample_correction<SE::KR2>());}
+      };
+      auto S = std::visit(functor,model.ptr);
+      return wrap(std::get<CorrectionData<SE::KR2> >(S));
+      break;
+    }
+    case SE::KRBoth:
+    {
+      auto functor = overloaded {
+        [](int) {  return returnType(0);}, 
+        [&](auto ptr){return returnType(ptr->matrix.template small_sample_correction<SE::KRBoth>());}
+      };
+      auto S = std::visit(functor,model.ptr);
+      return wrap(std::get<CorrectionData<SE::KRBoth> >(S));
+      break;
+    }
+    case SE::Sat:
+    {
+      auto functor = overloaded {
+        [](int) {  return returnType(0);}, 
+        [&](auto ptr){return returnType(ptr->matrix.template small_sample_correction<SE::Sat>());}
+      };
+      auto S = std::visit(functor,model.ptr);
+      return wrap(std::get<CorrectionData<SE::Sat> >(S));
+      break;
+    }
+      default:
+      {
+        Rcpp::stop("Not a valid small sample correction type");
+      }
+  }
+  
+}
+
+// [[Rcpp::export]]
+SEXP Model__box(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->matrix.box());}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<BoxResults>(S));
 }
 
 // [[Rcpp::export]]
@@ -285,7 +369,7 @@ SEXP Model__hessian(SEXP xp, int type = 0){
     [](auto ptr){return returnType(ptr->matrix.re_score());}
   };
   auto S = std::visit(functor,model.ptr);
-  return wrap(std::get<vector_matrix>(S));
+  return wrap(std::get<VectorMatrix>(S));
 }
 
 // [[Rcpp::export]]
@@ -306,7 +390,7 @@ SEXP Model__predict(SEXP xp, SEXP newdata_,
   };
   auto S_re = std::visit(functor_re,model.ptr);
   auto S_xb = std::visit(functor_xb,model.ptr);
-  vector_matrix res = std::get<vector_matrix>(S_re);
+  VectorMatrix res = std::get<VectorMatrix>(S_re);
   Eigen::VectorXd xb = std::get<Eigen::VectorXd>(S_xb);
   Eigen::MatrixXd samps(newdata.rows(),m>0 ? m : 1);
   if(m>0){
@@ -334,7 +418,7 @@ SEXP Model__predict_re(SEXP xp, SEXP newdata_,
     [&](auto ptr){return returnType(ptr->re.predict_re(newdata,newoffset));}
   };
   auto S_re = std::visit(functor_re,model.ptr);
-  vector_matrix res = std::get<vector_matrix>(S_re);
+  VectorMatrix res = std::get<VectorMatrix>(S_re);
   
   return Rcpp::List::create(
     Rcpp::Named("re_parameters") = wrap(res)

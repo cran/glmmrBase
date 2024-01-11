@@ -1,10 +1,5 @@
 #pragma once
 
-#define _USE_MATH_DEFINES
-
-#include <cmath> 
-#include <unordered_map>
-#include <RcppEigen.h>
 #include "algo.h"
 #include "general.h"
 #include "family.hpp"
@@ -14,7 +9,7 @@
 namespace glmmr {
 
 template<class T>
-T randomGaussian(T generator,
+inline T randomGaussian(T generator,
                  VectorXd& res)
 {
   for (size_t i = 0; i < res.size(); ++i)
@@ -462,7 +457,7 @@ inline double logdet(const Eigen::MatrixXd& M) {
   return ld;
 }
 
-inline MatrixXd sample_MVN(const vector_matrix& mu,
+inline MatrixXd sample_MVN(const VectorMatrix& mu,
                            int m){
   int n = mu.vec.size();
   MatrixXd L = mu.mat.llt().matrixL();
