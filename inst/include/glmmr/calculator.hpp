@@ -575,7 +575,8 @@ inline dblvec glmmr::calculator::calculate(const int i,
           fstack.pop();
           b_top_dx.push_back(fstack.top());
           fstack.pop();
-          double result = pow(a,b)*b_top_dx.back()*log(a) + pow(a,b-1)*b*a_top_dx.back();
+          double result = 0;
+          if(a > 0) result += pow(a,b)*b_top_dx.back()*log(a) + pow(a,b-1)*b*a_top_dx.back(); 
 #ifdef R_BUILD
           // this can sometimes result in a crash if the values of the parameters aren't right
           if(result != result)Rcpp::stop("Exponent dydx fail: "+std::to_string(a)+"^"+std::to_string(b-1));
@@ -1263,7 +1264,7 @@ inline void glmmr::calculator::print_names(bool data, bool parameters) const{
     Rcpp::Rcout << "\nData names: \n";
     glmmr::print_vec_1d<strvec>(data_names);
   }
-  if(data){
+  if(parameters){
     Rcpp::Rcout << "\nParameter names: \n";
     glmmr::print_vec_1d<strvec>(parameter_names);
   }

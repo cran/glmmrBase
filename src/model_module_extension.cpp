@@ -101,6 +101,28 @@ SEXP Model__aic(SEXP xp, int type = 0){
   return wrap(std::get<double>(S));
 }
 
+// [[Rcpp::export]]
+SEXP Model__get_log_likelihood_values(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->optim.current_likelihood_values());}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<std::pair<double,double> >(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__u_diagnostic(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->optim.u_diagnostic());}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<std::pair<double,double> >(S));
+}
+
 // MarginType type, dydx, diff, ratio
 // [[Rcpp::export]]
 SEXP Model__marginal(SEXP xp, 
@@ -157,6 +179,27 @@ void Model__mcmc_set_lambda(SEXP xp, SEXP lambda_, int type = 0){
 }
 
 // [[Rcpp::export]]
+void Model__reset_fn_counter(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {}, 
+    [](auto ptr){ptr->optim.reset_fn_counter();}
+  };
+  std::visit(functor,model.ptr);
+}
+
+// [[Rcpp::export]]
+SEXP Model__get_fn_counter(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->optim.fn_counter);}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<std::pair<int,int> >(S));
+}
+
+// [[Rcpp::export]]
 void Model__print_names(SEXP xp, bool data, bool parameters, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   auto functor = overloaded {
@@ -175,6 +218,34 @@ void Model__mcmc_set_max_steps(SEXP xp, SEXP max_steps_, int type = 0){
     [&max_steps](auto ptr){ptr->mcmc.mcmc_set_max_steps(max_steps);}
   };
   std::visit(functor,model.ptr);
+}
+
+// [[Rcpp::export]]
+void Model__saem(SEXP xp, bool saem_, int block_size = 20, double alpha = 0.8, bool pr_average = true, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {}, 
+    [&](auto ptr){
+      ptr->optim.control.saem = saem_;
+      ptr->optim.control.alpha = alpha;
+      ptr->re.mcmc_block_size = block_size;
+      ptr->optim.control.pr_average = pr_average;
+    }
+  };
+  std::visit(functor,model.ptr);
+}
+
+// [[Rcpp::export]]
+SEXP Model__ll_diff_variance(SEXP xp, bool beta, bool theta, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {return returnType(0);}, 
+    [&](auto ptr){
+      return returnType(ptr->optim.ll_diff_variance(beta,theta));
+    }
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<double>(S));
 }
 
 // [[Rcpp::export]]

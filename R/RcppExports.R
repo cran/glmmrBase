@@ -185,8 +185,8 @@ Model__update_theta <- function(xp, theta_, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__update_theta`, xp, theta_, type))
 }
 
-Model__update_u <- function(xp, u_, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__update_u`, xp, u_, type))
+Model__update_u <- function(xp, u_, append = FALSE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__update_u`, xp, u_, append, type))
 }
 
 Model__use_attenuation <- function(xp, use_, type = 0L) {
@@ -409,6 +409,14 @@ Model__aic <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__aic`, xp, type)
 }
 
+Model__get_log_likelihood_values <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__get_log_likelihood_values`, xp, type)
+}
+
+Model__u_diagnostic <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__u_diagnostic`, xp, type)
+}
+
 Model__marginal <- function(xp, x, margin = 0L, re = 3L, se = 0L, at = NULL, atmeans = NULL, average = NULL, xvals_first = 1, xvals_second = 0, atvals = NULL, revals = NULL, type = 0L) {
     .Call(`_glmmrBase_Model__marginal`, xp, x, margin, re, se, at, atmeans, average, xvals_first, xvals_second, atvals, revals, type)
 }
@@ -417,12 +425,28 @@ Model__mcmc_set_lambda <- function(xp, lambda_, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__mcmc_set_lambda`, xp, lambda_, type))
 }
 
+Model__reset_fn_counter <- function(xp, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__reset_fn_counter`, xp, type))
+}
+
+Model__get_fn_counter <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__get_fn_counter`, xp, type)
+}
+
 Model__print_names <- function(xp, data, parameters, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__print_names`, xp, data, parameters, type))
 }
 
 Model__mcmc_set_max_steps <- function(xp, max_steps_, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__mcmc_set_max_steps`, xp, max_steps_, type))
+}
+
+Model__saem <- function(xp, saem_, block_size = 20L, alpha = 0.8, pr_average = TRUE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__saem`, xp, saem_, block_size, alpha, pr_average, type))
+}
+
+Model__ll_diff_variance <- function(xp, beta, theta, type = 0L) {
+    .Call(`_glmmrBase_Model__ll_diff_variance`, xp, beta, theta, type)
 }
 
 Model__mcmc_set_refresh <- function(xp, refresh_, type = 0L) {
