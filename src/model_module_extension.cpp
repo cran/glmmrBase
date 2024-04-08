@@ -61,6 +61,13 @@ SEXP wrap(const BoxResults& x){
 using namespace Rcpp;
 
 // [[Rcpp::export]]
+SEXP near_semi_pd(SEXP mat_){
+  Eigen::MatrixXd mat = as<Eigen::MatrixXd>(mat_);
+  glmmr::Eigen_ext::near_semi_pd(mat);
+  return wrap(mat);
+}
+
+// [[Rcpp::export]]
 SEXP Covariance__submatrix(SEXP xp, int i){
   XPtr<nngp> ptr(xp);
   VectorMatrix result = ptr->submatrix(i);
@@ -73,6 +80,9 @@ void Model_hsgp__set_approx_pars(SEXP xp, SEXP m_, SEXP L_){
   Eigen::ArrayXd L = as<Eigen::ArrayXd>(L_);
   XPtr<glmm_hsgp> ptr(xp);
   ptr->model.covariance.update_approx_parameters(m,L);
+  ptr->reset_u();
+  std::vector<double> theta = ptr->model.covariance.parameters_;
+  ptr->model.covariance.update_parameters(theta);
 }
 
 // [[Rcpp::export]]
@@ -99,6 +109,17 @@ SEXP Model__aic(SEXP xp, int type = 0){
   };
   auto S = std::visit(functor,model.ptr);
   return wrap(std::get<double>(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__residuals(SEXP xp, int rtype = 2, bool conditional = true, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [&](auto ptr){return returnType(ptr->matrix.residuals(rtype,conditional));}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<MatrixXd>(S));
 }
 
 // [[Rcpp::export]]
@@ -221,7 +242,7 @@ void Model__mcmc_set_max_steps(SEXP xp, SEXP max_steps_, int type = 0){
 }
 
 // [[Rcpp::export]]
-void Model__saem(SEXP xp, bool saem_, int block_size = 20, double alpha = 0.8, bool pr_average = true, int type = 0){
+void Model__set_sml_parameters(SEXP xp, bool saem_, int block_size = 20, double alpha = 0.8, bool pr_average = true, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   auto functor = overloaded {
     [](int) {}, 
@@ -230,6 +251,10 @@ void Model__saem(SEXP xp, bool saem_, int block_size = 20, double alpha = 0.8, b
       ptr->optim.control.alpha = alpha;
       ptr->re.mcmc_block_size = block_size;
       ptr->optim.control.pr_average = pr_average;
+      if(!saem_){
+        ptr->optim.ll_current.resize(block_size,NoChange);
+        // ptr->optim.ll_previous.resize(block_size,NoChange);
+      }
     }
   };
   std::visit(functor,model.ptr);
@@ -313,14 +338,25 @@ SEXP Model__theta_parameter_names(SEXP xp, int type = 0){
 }
 
 // [[Rcpp::export]]
-SEXP Model__hess_and_grad(SEXP xp, int type = 0){
+SEXP Model__hessian_correction(SEXP xp, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   auto functor = overloaded {
     [](int) {  return returnType(0);}, 
-    [](auto ptr){return returnType(ptr->matrix.hess_and_grad());}
+    [](auto ptr){return returnType(ptr->matrix.hessian_nonlinear_correction());}
   };
   auto S = std::visit(functor,model.ptr);
-  return wrap(std::get<MatrixMatrix>(S));
+  return wrap(std::get<MatrixXd>(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__any_nonlinear(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->model.linear_predictor.calc.any_nonlinear);}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<bool>(S));
 }
 
 // [[Rcpp::export]]
@@ -430,17 +466,6 @@ SEXP Model__cov_deriv(SEXP xp, int type = 0){
   };
   auto S = std::visit(functor,model.ptr);
   return wrap(std::get<std::vector<Eigen::MatrixXd> >(S));
-}
-
-// [[Rcpp::export]]
-SEXP Model__hessian(SEXP xp, int type = 0){
-  glmmrType model(xp,static_cast<Type>(type));
-  auto functor = overloaded {
-    [](int) {  return returnType(0);}, 
-    [](auto ptr){return returnType(ptr->matrix.re_score());}
-  };
-  auto S = std::visit(functor,model.ptr);
-  return wrap(std::get<VectorMatrix>(S));
 }
 
 // [[Rcpp::export]]

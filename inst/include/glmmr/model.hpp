@@ -35,6 +35,7 @@ public:
   virtual void    update_beta(const dblvec &beta_);
   virtual void    update_theta(const dblvec &theta_);
   virtual void    update_u(const MatrixXd &u_, bool append = false);
+  virtual void    reset_u(); // just resets the random effects samples to zero
   virtual void    set_trace(int trace_);
   virtual dblpair marginal(const MarginType type,
                              const std::string& x,
@@ -88,7 +89,15 @@ template<typename modeltype>
 inline void glmmr::Model<modeltype>::update_theta(const dblvec &theta_){
   model.covariance.update_parameters(theta_);
   re.zu_ = model.covariance.ZLu(re.u_);
-  model.vcalc.data = model.covariance.ZL();
+  // model.vcalc.data = model.covariance.ZL();
+}
+
+template<typename modeltype>
+inline void glmmr::Model<modeltype>::reset_u(){
+  re.u_.resize(model.covariance.Q(),1);
+  re.u_.setZero();
+  re.zu_.resize(NoChange,1);
+  re.zu_.setZero();
 }
 
 template<typename modeltype>
@@ -97,24 +106,38 @@ inline void glmmr::Model<modeltype>::update_u(const MatrixXd &u_, bool append){
   if(u_.rows()!=model.covariance.Q())Rcpp::stop(std::to_string(u_.rows())+" rows provided, "+std::to_string(model.covariance.Q())+" expected");
 #endif
   
+  bool action_append = append;
+  // if HSGP then check and update the size of u is m has changed
+  if constexpr (std::is_same_v<modeltype,bits_hsgp>){
+    if(model.covariance.Q() != re.u_.rows()){
+      re.u_.resize(model.covariance.Q(),1);
+      re.u_.setZero();
+    }
+  }
+  
   int newcolsize = u_.cols();
   int currcolsize = re.u_.cols();
+  // check if the existing samples are a single column of zeros - if so remove them
+  if(append && re.u_.cols() == 1 && re.u_.col(0).isZero()) action_append = false;
+  // update stored ll values 
+  // if(optim.ll_previous.rows() != optim.ll_current.rows()) optim.ll_previous.resize(optim.ll_current.rows(),NoChange);
+  // optim.ll_previous = optim.ll_current;
   
-  if(append){
+  if(action_append){
     re.u_.conservativeResize(NoChange,currcolsize + newcolsize);
     re.zu_.conservativeResize(NoChange,currcolsize + newcolsize);
     re.u_.rightCols(newcolsize) = u_;
     optim.ll_current.resize(currcolsize + newcolsize,NoChange);
   } else {
     if(u_.cols()!=re.u_.cols()){
-#if defined(ENABLE_DEBUG) && defined(R_BUILD)
-      Rcpp::Rcout << "\nResize u: " << model.covariance.Q() << "x" << u_.cols();
-#endif
+      #if defined(ENABLE_DEBUG) && defined(R_BUILD)
+        Rcpp::Rcout << "\nResize u: " << model.covariance.Q() << "x" << u_.cols();
+      #endif
       re.u_.resize(NoChange,newcolsize);
       re.zu_.resize(NoChange,newcolsize);
-      re.u_ = u_;
-      if(newcolsize != optim.ll_current.rows()) optim.ll_current.resize(newcolsize,NoChange);
     }
+    re.u_ = u_;
+    if(re.u_.cols() != optim.ll_current.rows()) optim.ll_current.resize(newcolsize,NoChange);
   }
   re.zu_ = model.covariance.ZLu(re.u_);
 }
@@ -123,6 +146,7 @@ template<typename modeltype>
 inline void glmmr::Model<modeltype>::set_trace(int trace_){
   optim.trace = trace_;
   mcmc.trace = trace_;
+  model.trace = trace_;
   if(trace_ > 0){
     mcmc.verbose = true;
   } else {

@@ -253,6 +253,24 @@ inline void re_linear_predictor(glmmr::calculator& calc,
   }
 }
 
+inline void re_log_likelihood(glmmr::calculator& calc,
+                                const int Q){
+  using instructs = std::vector<Do>;
+  instructs re_seq = {Do::PushParameter,Do::Square,Do::Add};
+  for(int i = 0; i < Q; i++){
+    calc.instructions.insert(calc.instructions.end(),re_seq.begin(),re_seq.end());
+    auto uidx = std::find(calc.parameter_names.begin(),calc.parameter_names.end(),"v_"+std::to_string(i));
+    if(uidx == calc.parameter_names.end()){
+      #ifdef R_BUILD
+      Rcpp::stop("Error finding name of random effect in calculator");
+      #endif
+    } else {
+      int idx_to_add = uidx - calc.parameter_names.begin();
+      calc.indexes.push_back(idx_to_add);
+    }
+  }
+}
+
 inline void linear_predictor_to_link(glmmr::calculator& calc,
                                      const Link link){
   using instructs = std::vector<Do>;
@@ -276,45 +294,11 @@ inline void linear_predictor_to_link(glmmr::calculator& calc,
     }
   case Link::probit:
     {
-      // probit is a pain because of the error function!
-      // this uses Abramowitz and Stegun approximation.
-      instructs iStar = {Do::Int2,Do::Sqrt};
-      iStar.insert(iStar.end(),calc.instructions.begin(),calc.instructions.end());
-      iStar.push_back(Do::Divide);
-      instructs M = iStar;
-      instructs MStar = {Do::Constant1,Do::Multiply,Do::Int1,Do::Add,Do::Int1,Do::Divide};
-      M.insert(M.end(),MStar.begin(),MStar.end());
-      instructs Ltail = {Do::Power,Do::Multiply,Do::Add};
-      instructs L1 = {Do::Constant2};
-      L1.insert(L1.end(),M.begin(),M.end());
-      L1.push_back(Do::Multiply);
-      instructs L2 = {Do::Constant3,Do::Int2};
-      L1.insert(L1.end(),L2.begin(),L2.end());
-      L1.insert(L1.end(),M.begin(),M.end());
-      L1.insert(L1.end(),Ltail.begin(),Ltail.end());
-      L2 = {Do::Constant4,Do::Int3};
-      L1.insert(L1.end(),L2.begin(),L2.end());
-      L1.insert(L1.end(),M.begin(),M.end());
-      L1.insert(L1.end(),Ltail.begin(),Ltail.end());
-      L2 = {Do::Constant5,Do::Int4};
-      L1.insert(L1.end(),L2.begin(),L2.end());
-      L1.insert(L1.end(),M.begin(),M.end());
-      L1.insert(L1.end(),Ltail.begin(),Ltail.end());
-      L2 = {Do::Constant6,Do::Int5};
-      L1.insert(L1.end(),L2.begin(),L2.end());
-      L1.insert(L1.end(),M.begin(),M.end());
-      L1.push_back(Do::Power);
-      L1.push_back(Do::Multiply);
-      instructs L3 = {Do::Int2};
-      L3.insert(L3.end(),iStar.begin(),iStar.end());
-      instructs L4 = {Do::Divide,Do::Negate,Do::Power};
-      L3.insert(L3.end(),L4.begin(),L4.end());
-      out = L1;
-      out.insert(out.end(),L3.begin(),L3.end());
-      out.push_back(Do::Multiply);
-      out.push_back(Do::Int1);
-      out.push_back(Do::Subtract);
-      break;
+      out.push_back(Do::SqrtTwo);
+       out = calc.instructions;
+       instructs probit_instruct = {Do::Divide, Do::ErrorFunc, Do::Int1, Do::Add, Do::Half, Do::Multiply};
+      out.insert(out.end(),probit_instruct.begin(),probit_instruct.end());
+       break;
     }
   case Link::identity:
     {
@@ -333,6 +317,7 @@ inline void linear_predictor_to_link(glmmr::calculator& calc,
   calc.instructions = out;
 }
 
+// many of these could be optimised better!
 inline void link_to_likelihood(glmmr::calculator& calc,
                                const Fam family){
   using instructs = std::vector<Do>;
@@ -342,10 +327,9 @@ inline void link_to_likelihood(glmmr::calculator& calc,
   switch (family){
     case Fam::gaussian:
       {
-        instructs gaus_instruct = {Do::PushY,Do::Subtract,Do::Square,Do::Divide,Do::Int2,Do::Int1,
-                                   Do::Divide,Do::Multiply,Do::Int2,Do::Pi,Do::Multiply,
-                                   Do::Log,Do::Int2,Do::Int1,Do::Divide,Do::Multiply,Do::Add,
-                                   Do::PushVariance,Do::Log,Do::Int2,Do::Int1,Do::Divide,
+        instructs gaus_instruct = {Do::PushY,Do::Subtract,Do::Square,Do::Divide,Do::Half,
+                                   Do::Multiply,Do::HalfLog2Pi,Do::Add,
+                                   Do::PushVariance,Do::Log,Do::Half,
                                    Do::Multiply,Do::Add,Do::Negate};
         out.push_back(Do::PushVariance);
         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
@@ -368,14 +352,17 @@ inline void link_to_likelihood(glmmr::calculator& calc,
       }
     case Fam::poisson:
       {
-        instructs poisson_instruct = {Do::PushY,Do::LogFactorialApprox,Do::Add,Do::PushY};
-        instructs poisson_instruct2 = {Do::Log,Do::Multiply,Do::Subtract};
+        out.push_back(Do::PushY);
+        out.push_back(Do::LogFactorialApprox);
         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-        out.insert(out.end(),poisson_instruct.begin(),poisson_instruct.end());
         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-        out.insert(out.end(),poisson_instruct2.begin(),poisson_instruct2.end());
+        out.push_back(Do::Log);
+        out.push_back(Do::PushY);
+        out.push_back(Do::Multiply);
+        out.push_back(Do::Subtract);
+        out.push_back(Do::Subtract);
         break;
       }
     case Fam::gamma:

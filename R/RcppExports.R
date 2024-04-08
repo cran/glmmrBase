@@ -213,8 +213,8 @@ Model__set_bound <- function(xp, bound_, beta = TRUE, lower = TRUE, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__set_bound`, xp, bound_, beta, lower, type))
 }
 
-Model__print_instructions <- function(xp, linpred, loglik, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__print_instructions`, xp, linpred, loglik, type))
+Model__print_instructions <- function(xp, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__print_instructions`, xp, type))
 }
 
 Model__log_prob <- function(xp, v_, type = 0L) {
@@ -389,6 +389,10 @@ Model__xb <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__xb`, xp, type)
 }
 
+near_semi_pd <- function(mat_) {
+    .Call(`_glmmrBase_near_semi_pd`, mat_)
+}
+
 Covariance__submatrix <- function(xp, i) {
     .Call(`_glmmrBase_Covariance__submatrix`, xp, i)
 }
@@ -407,6 +411,10 @@ Model_hsgp__dim <- function(xp) {
 
 Model__aic <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__aic`, xp, type)
+}
+
+Model__residuals <- function(xp, rtype = 2L, conditional = TRUE, type = 0L) {
+    .Call(`_glmmrBase_Model__residuals`, xp, rtype, conditional, type)
 }
 
 Model__get_log_likelihood_values <- function(xp, type = 0L) {
@@ -441,8 +449,8 @@ Model__mcmc_set_max_steps <- function(xp, max_steps_, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__mcmc_set_max_steps`, xp, max_steps_, type))
 }
 
-Model__saem <- function(xp, saem_, block_size = 20L, alpha = 0.8, pr_average = TRUE, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__saem`, xp, saem_, block_size, alpha, pr_average, type))
+Model__set_sml_parameters <- function(xp, saem_, block_size = 20L, alpha = 0.8, pr_average = TRUE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__set_sml_parameters`, xp, saem_, block_size, alpha, pr_average, type))
 }
 
 Model__ll_diff_variance <- function(xp, beta, theta, type = 0L) {
@@ -473,8 +481,12 @@ Model__theta_parameter_names <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__theta_parameter_names`, xp, type)
 }
 
-Model__hess_and_grad <- function(xp, type = 0L) {
-    .Call(`_glmmrBase_Model__hess_and_grad`, xp, type)
+Model__hessian_correction <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__hessian_correction`, xp, type)
+}
+
+Model__any_nonlinear <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__any_nonlinear`, xp, type)
 }
 
 Model__sandwich <- function(xp, type = 0L) {
@@ -499,10 +511,6 @@ Model__box <- function(xp, type = 0L) {
 
 Model__cov_deriv <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__cov_deriv`, xp, type)
-}
-
-Model__hessian <- function(xp, type = 0L) {
-    .Call(`_glmmrBase_Model__hessian`, xp, type)
 }
 
 Model__predict <- function(xp, newdata_, newoffset_, m, type = 0L) {

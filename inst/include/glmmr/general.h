@@ -16,6 +16,7 @@
 #define EIGEN_HAS_STD_RESULT_OF 0 // This has no effect with RcppEigen as it has Eigen <0.3.4
 #endif
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS 
+#define EIGEN_DEFAULT_DENSE_INDEX_TYPE int
 // includes
 
 #include <vector>
@@ -40,6 +41,7 @@
 #include <boost/math/distributions/fisher_f.hpp>
 #include <random>
 #include <boost/math/special_functions/digamma.hpp>
+#include <boost/math/special_functions/erf.hpp>
 #include <boost/random.hpp>
 
 using namespace Eigen;

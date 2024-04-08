@@ -310,6 +310,7 @@ require larger numbers of steps and so is slower. Smaller numbers are likely req
 \itemize{
 \item \href{#method-Model-use_attenuation}{\code{Model$use_attenuation()}}
 \item \href{#method-Model-fitted}{\code{Model$fitted()}}
+\item \href{#method-Model-residuals}{\code{Model$residuals()}}
 \item \href{#method-Model-predict}{\code{Model$predict()}}
 \item \href{#method-Model-new}{\code{Model$new()}}
 \item \href{#method-Model-print}{\code{Model$print()}}
@@ -390,7 +391,35 @@ with existing X matrix and not user supplied matrix X and this will also ignore 
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-A \link[Matrix]{Matrix} class object containing the predicted values
+Fitted values as either a vector or matrix depending on the number of samples
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Model-residuals"></a>}}
+\if{latex}{\out{\hypertarget{method-Model-residuals}{}}}
+\subsection{Method \code{residuals()}}{
+Generates the residuals for the model
+
+Generates one of several types of residual for the model. If conditional = TRUE then
+the residuals include the random effects, otherwise only the fixed effects are included. For type,
+there are raw, pearson, and standardized residuals. For conditional residuals a matrix is returned
+with each column corresponding to a sample of the random effects.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Model$residuals(type = "standardized", conditional = TRUE)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{type}}{Either "standardized", "raw" or "pearson"}
+
+\item{\code{conditional}}{Logical indicating whether to condition on the random effects (TRUE) or not (FALSE)}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A matrix with either one column is conditional is false, or with number of columns corresponding
+to the number of MCMC samples.
 }
 }
 \if{html}{\out{<hr>}}
@@ -428,7 +457,8 @@ the conditional distribution of the random effects, and any random effect sample
 \if{html}{\out{<a id="method-Model-new"></a>}}
 \if{latex}{\out{\hypertarget{method-Model-new}{}}}
 \subsection{Method \code{new()}}{
-Create a new Model object
+Create a new Model object. Typically, a model is generated from a formula and data. However, it can also be
+generated from a previous model fit.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Model$new(
   formula,
@@ -439,7 +469,8 @@ Create a new Model object
   var_par = NULL,
   offset = NULL,
   weights = NULL,
-  trials = NULL
+  trials = NULL,
+  model_fit = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -474,6 +505,8 @@ objects, or as members of the list of arguments to \code{mean}. Current accepts 
 
 \item{\code{trials}}{(Optional) For binomial family models, the number of trials for each observation. If it is not set, then it will
 default to 1 (a bernoulli model).}
+
+\item{\code{model_fit}}{(optional) A \code{mcml} model fit resulting from a call to \code{MCML} or \code{LA}}
 }
 \if{html}{\out{</div>}}
 }
@@ -681,21 +714,39 @@ des$update_parameters(cov.pars = c(0.1,0.9))
 \if{html}{\out{<a id="method-Model-information_matrix"></a>}}
 \if{latex}{\out{\hypertarget{method-Model-information_matrix}{}}}
 \subsection{Method \code{information_matrix()}}{
-Generates the information matrix of the GLS estimator
+Generates the information matrix of the mixed model GLS estimator (X'S^-1X). The inverse of this matrix is an
+estimator for the variance-covariance matrix of the fixed effect parameters. For various small sample corrections
+see \code{small_sample_correction()} and \code{box()}. For models with non-linear functions of fixed effect parameters,
+a correction to the Hessian matrix is required, which is automatically calculated or optionally returned or disabled.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$information_matrix(include.re = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$information_matrix(
+  include.re = FALSE,
+  theta = FALSE,
+  hessian.corr = "add",
+  adj.nonpsd = TRUE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{include.re}}{logical indicating whether to return the information matrix including the random effects components (TRUE),
-or the GLS information matrix for beta only.}
+or the mixed model information matrix for beta only (FALSE).}
+
+\item{\code{theta}}{Logical. If TRUE the function will return the variance-coviariance matrix for the covariance parameters and ignore the first argument. Otherwise, the fixed effect
+parameter information matrix is returned.}
+
+\item{\code{hessian.corr}}{String. If there are non-linear functions of fixed effect parameters then a correction to the Hessian can be applied ("add"), returned on its
+own ("return"), or ignored ("none")}
+
+\item{\code{adj.nonspd}}{Logical. For models nonlinear in fixed effect parameters, the Hessian of the linear predictor with respect to the
+model parameters is often not positive semi-definite, which can cause a singular matrix and failure to calculate valid standard errors.
+The adjustment matrix will be corrected if it is not positive semi-definite and this option is TRUE.}
 }
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-A PxP matrix
+A matrix
 }
 }
 \if{html}{\out{<hr>}}
@@ -866,7 +917,7 @@ A matrix.
 \if{html}{\out{<a id="method-Model-MCML"></a>}}
 \if{latex}{\out{\hypertarget{method-Model-MCML}{}}}
 \subsection{Method \code{MCML()}}{
-Markov Chain Monte Carlo Maximum Likelihood  model fitting
+Stochastic Maximum Likelihood model fitting
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Model$MCML(
   y,
@@ -982,12 +1033,12 @@ Maximum Likelihood model fitting with Laplace Approximation
 \if{html}{\out{<div class="r">}}\preformatted{Model$LA(
   y,
   start,
-  method = "nloptim",
+  method = "nr",
   se = "gls",
   max.iter = 40,
   tol = 1e-04,
   se.theta = TRUE,
-  algo = ifelse(self$mean$any_nonlinear(), 2, 1),
+  algo = 2,
   lower.bound = NULL,
   upper.bound = NULL,
   lower.bound.theta = NULL,
@@ -1090,7 +1141,7 @@ None, called for effects
 \subsection{Method \code{mcmc_sample()}}{
 Generate an MCMC sample of the random effects
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$mcmc_sample(mcmc.pkg = "cmdstan")}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$mcmc_sample(mcmc.pkg = "rstan")}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -1122,9 +1173,9 @@ model fit, see member function \verb{$u}
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{y}}{Vector of outcome data}
+\item{\code{y}}{(optional) Vector of outcome data, if not specified then data must have been set in another function.}
 
-\item{\code{u}}{Vector of random effects scaled by the Cholesky decomposition of D}
+\item{\code{u}}{(optional) Vector of random effects scaled by the Cholesky decomposition of D}
 
 \item{\code{beta}}{Logical. Whether the log gradient for the random effects (FALSE) or for the linear predictor parameters (TRUE)}
 }
@@ -1157,16 +1208,18 @@ A list of matrices, see description for contents of the list.
 \if{html}{\out{<a id="method-Model-u"></a>}}
 \if{latex}{\out{\hypertarget{method-Model-u}{}}}
 \subsection{Method \code{u()}}{
-Returns the sample of random effects from the last model fit
+Returns the sample of random effects from the last model fit, or updates the samples for the model.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$u(scaled = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$u(scaled = TRUE, u)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{scaled}}{Logical indicating whether to return samples on the N(0,I) scale (\code{scaled=FALSE}) or
+\item{\code{scaled}}{Logical indicating whether the samples are on the N(0,I) scale (\code{scaled=FALSE}) or
 N(0,D) scale (\code{scaled=TRUE})}
+
+\item{\code{u}}{(optional) Matrix of random effect samples. If provided then the internal samples are replaced with these values. These samples should be N(0,I).}
 }
 \if{html}{\out{</div>}}
 }
@@ -1203,24 +1256,15 @@ The log-likelihood of the model parameters
 \if{html}{\out{<a id="method-Model-calculator_instructions"></a>}}
 \if{latex}{\out{\hypertarget{method-Model-calculator_instructions}{}}}
 \subsection{Method \code{calculator_instructions()}}{
-Prints the internal instructions used to calculate the linear predictor and/or
-the log likelihood. Internally the class uses a reverse polish notation to store and
+Prints the internal instructions and data used to calculate the linear predictor.
+Internally the class uses a reverse polish notation to store and
 calculate different functions, including user-specified non-linear mean functions. This
 function will print all the steps. Mainly used for debugging and determining how the
 class has interpreted non-linear model specifications.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$calculator_instructions(linpred = TRUE, loglik = FALSE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$calculator_instructions()}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{linpred}}{Logical. Whether to print the linear predictor instructions.}
-
-\item{\code{loglik}}{Logical. Whether to print the log-likelihood instructions.}
-}
-\if{html}{\out{</div>}}
-}
 \subsection{Returns}{
 None. Called for effects.
 }

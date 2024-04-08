@@ -93,7 +93,7 @@ Model <- R6::R6Class("Model",
                        #' @param sample Logical. If TRUE then the parameters will be re-sampled from their sampling distribution. Currently only works 
                        #' with existing X matrix and not user supplied matrix X and this will also ignore any provided random effects.
                        #' @param sample_n Integer. If sample is TRUE, then this is the number of samples.
-                       #' @return A \link[Matrix]{Matrix} class object containing the predicted values
+                       #' @return Fitted values as either a vector or matrix depending on the number of samples
                        fitted = function(type="link", X, u, sample= FALSE, sample_n = 100){
                          if(missing(X)){
                            if(!sample){
@@ -121,6 +121,25 @@ Model <- R6::R6Class("Model",
                          }
                          return(Xb)
                        },
+                       #' @description
+                       #' Generates the residuals for the model
+                       #' 
+                       #' Generates one of several types of residual for the model. If conditional = TRUE then 
+                       #' the residuals include the random effects, otherwise only the fixed effects are included. For type,
+                       #' there are raw, pearson, and standardized residuals. For conditional residuals a matrix is returned 
+                       #' with each column corresponding to a sample of the random effects.
+                       #' @param type Either "standardized", "raw" or "pearson"
+                       #' @param conditional Logical indicating whether to condition on the random effects (TRUE) or not (FALSE)
+                       #' @return A matrix with either one column is conditional is false, or with number of columns corresponding 
+                       #' to the number of MCMC samples.
+                       residuals = function(type = "standardized",
+                                            conditional = TRUE){
+                         if(!private$y_has_been_updated)stop("No data y has been provided")
+                         if(!type%in%c("standardized","raw","pearson"))stop("type must be one of standardized, raw, or pearson")
+                         rtype_int <- match(type, c("raw","pearson","standardized")) - 1
+                         R <- Model__residuals(private$ptr,rtype_int,conditional,private$model_type())
+                         return(R)
+                       },
                        #' @description 
                        #' Generate predictions at new values
                        #' 
@@ -143,7 +162,8 @@ Model <- R6::R6Class("Model",
                          return(out)
                        },
                        #' @description
-                       #' Create a new Model object
+                       #' Create a new Model object. Typically, a model is generated from a formula and data. However, it can also be 
+                       #' generated from a previous model fit. 
                        #' @param formula An optional model formula containing fixed and random effect terms. If not specified, then
                        #' separate formulae need to be provided to the covariance and mean arguments below.
                        #' @param covariance (Optional) Either a \link[glmmrBase]{Covariance} object, an equivalent list of arguments
@@ -164,6 +184,7 @@ Model <- R6::R6Class("Model",
                        #' @param trials (Optional) For binomial family models, the number of trials for each observation. If it is not set, then it will
                        #' default to 1 (a bernoulli model).
                        #' @param weights (Optional) A vector of weights. 
+                       #' @param model_fit (optional) A `mcml` model fit resulting from a call to `MCML` or `LA`
                        #' @return A new Model class object
                        #' @seealso \link[glmmrBase]{nelder}, \link[glmmrBase]{MeanFunction}, \link[glmmrBase]{Covariance}
                        #' @examples
@@ -217,142 +238,167 @@ Model <- R6::R6Class("Model",
                                              var_par = NULL,
                                              offset = NULL,
                                              weights = NULL,
-                                             trials = NULL){
-
-                         if(is.null(family)){
-                           stop("No family specified.")
-                         } else {
-                           self$family <- family
-                         }
-                         
-                         if(!is.null(var_par)){
-                           self$var_par <- var_par
-                         } else {
-                           self$var_par <- 1
-                         }
-
-                         if(!missing(formula)){
-                           if(!missing(covariance) && is(covariance,"R6"))stop("Do not specify both formula and Covariance class object")
-                           if(!missing(mean) && is(mean,"R6"))stop("Do not specify both formula and MeanFunction class object")
-                           self$formula <- Reduce(paste,as.character(formula))
-                           if(is.null(data)){
-                            stop("Data must be specified with a formula")
+                                             trials = NULL,
+                                             model_fit = NULL){
+                         if(!is.null(model_fit)){
+                           if(!missing(formula) | !missing(covariance) | !missing(mean)) message("Previous model fit has been provided, all other arguments are ignored")
+                           self$family <- do.call(model_fit$family, list(link = model_fit$link))
+                           if(model_fit$var_par_family){
+                             self$var_par <- model_fit$coefficients$est[model_fit$P + model_fit$Q + 1]
                            } else {
-                             if(missing(covariance) || (!all(is(covariance,"numeric")) & !"parameters"%in%names(covariance))){
-                               self$covariance <- Covariance$new(
-                                 formula = formula,
-                                 data = data
-                               )
-                             } else {
-                               if("parameters"%in%names(covariance)){
-                                 self$covariance <- Covariance$new(
-                                   formula = formula,
-                                   data = data,
-                                   parameters = covariance$parameters
-                                 )
-                               } else if(all(is(covariance,"numeric"))){
-                                 self$covariance <- Covariance$new(
-                                   formula = formula,
-                                   data = data,
-                                   parameters = covariance
-                                 )
-                               } else {
-                                 stop("Cannot interpret covariance argument")
-                               }
-                             }
-                             if(missing(mean) || (!"parameters"%in%names(mean) & !all(is(mean,"numeric")))){
-                               self$mean <- MeanFunction$new(
-                                 formula = formula,
-                                 data = data
-                               )
-                             } else {
-                               if("parameters"%in%names(mean)){
-                                 self$mean <- MeanFunction$new(
-                                   formula = formula,
-                                   data = data,
-                                   parameters = mean$parameters
-                                 )
-                               } else if(all(is(mean,"numeric"))){
-                                 self$mean <- MeanFunction$new(
-                                   formula = formula,
-                                   data = data,
-                                   parameters = mean
-                                 )
-                               } else {
-                                 stop("Cannot interpret mean argument")
-                               }
-                             }
+                             self$var_par <- 1
                            }
+                           self$covariance <- Covariance$new(
+                             formula = model_fit$cov_form,
+                             data = model_fit$model_data$data,
+                             parameters = model_fit$coefficients$est[(model_fit$P + 1):(model_fit$P + model_fit$Q)]
+                           )
+                           self$mean <- MeanFunction$new(
+                             formula = model_fit$mean_form,
+                             data = model_fit$model_data$data,
+                             parameters = model_fit$coefficients$est[1:(model_fit$P)]
+                           )
+                           self$mean$offset <- model_fit$model_data$offset
+                           self$weights <- model_fit$model_data$weights
+                           if(self$family[[1]]=="binomial") self$trials <- model_fit$model_data$trials
                          } else {
-                           if(is(covariance,"R6")){
-                             if(is(covariance,"Covariance")){
-                               self$covariance <- covariance
-                               if(is.null(covariance$data)){
-                                 if(is.null(data)){
-                                   stop("No data specified in covariance object or call to function.")
+                           if(is.null(family)){
+                             stop("No family specified.")
+                           } else {
+                             self$family <- family
+                           }
+                           
+                           if(!is.null(var_par)){
+                             self$var_par <- var_par
+                           } else {
+                             self$var_par <- 1
+                           }
+                           
+                           if(!missing(formula)){
+                             if(!missing(covariance) && is(covariance,"R6"))stop("Do not specify both formula and Covariance class object")
+                             if(!missing(mean) && is(mean,"R6"))stop("Do not specify both formula and MeanFunction class object")
+                             self$formula <- Reduce(paste,as.character(formula))
+                             if(is.null(data)){
+                               stop("Data must be specified with a formula")
+                             } else {
+                               if(missing(covariance) || (!all(is(covariance,"numeric")) & !"parameters"%in%names(covariance))){
+                                 self$covariance <- Covariance$new(
+                                   formula = formula,
+                                   data = data
+                                 )
+                               } else {
+                                 if("parameters"%in%names(covariance)){
+                                   self$covariance <- Covariance$new(
+                                     formula = formula,
+                                     data = data,
+                                     parameters = covariance$parameters
+                                   )
+                                 } else if(all(is(covariance,"numeric"))){
+                                   self$covariance <- Covariance$new(
+                                     formula = formula,
+                                     data = data,
+                                     parameters = covariance
+                                   )
                                  } else {
-                                   self$covariance$data <- data
+                                   stop("Cannot interpret covariance argument")
                                  }
                                }
-                             } else {
-                               stop("covariance should be Covariance class or list of appropriate arguments")
+                               if(missing(mean) || (!"parameters"%in%names(mean) & !all(is(mean,"numeric")))){
+                                 self$mean <- MeanFunction$new(
+                                   formula = formula,
+                                   data = data
+                                 )
+                               } else {
+                                 if("parameters"%in%names(mean)){
+                                   self$mean <- MeanFunction$new(
+                                     formula = formula,
+                                     data = data,
+                                     parameters = mean$parameters
+                                   )
+                                 } else if(all(is(mean,"numeric"))){
+                                   self$mean <- MeanFunction$new(
+                                     formula = formula,
+                                     data = data,
+                                     parameters = mean
+                                   )
+                                 } else {
+                                   stop("Cannot interpret mean argument")
+                                 }
+                               }
                              }
-                           } else if(is(covariance,"list")){
-                             if(is.null(covariance$formula))stop("A formula must be specified for the covariance")
-                             if(is.null(covariance$data) & is.null(data))stop("No data specified in covariance list or call to function.")
-                             self$covariance <- Covariance$new(
-                               formula= covariance$formula
-                             )
-                             if(is.null(covariance$data)){
-                               self$covariance$data <- data
-                             } else {
-                               self$covariance$data <- covariance$data
-                             }
-                             if(!is.null(covariance$parameters))self$covariance$update_parameters(covariance$parameters)
-                             if(!is.null(covariance$eff_range))self$covariance$eff_range <- covariance$eff_range
-                           }
-                           if(is(mean,"R6")){
-                             if(is(mean,"MeanFunction")){
-                               self$mean <- mean
-                             } else {
-                               stop("mean should be MeanFunction class or list of appropriate arguments")
-                             }
-                           } else if(is(mean,"list")){
-                             if(is.null(mean$formula))stop("A formula must be specified for the mean function.")
-                             if(is.null(mean$data) & is.null(data))stop("No data specified in mean list or call to function.")
-                             if(is.null(mean$data)){
-                               self$mean <- MeanFunction$new(
-                                 formula = mean$formula,
-                                 data = data
-                               )
-                             } else {
-                               self$mean <- MeanFunction$new(
-                                 formula = mean$formula,
-                                 data = mean$data
-                               )
-                             }
-                             if(!is.null(mean$parameters))self$mean$update_parameters(mean$parameters)
-                           }
-                         }
-                         if(is.null(offset)){
-                           self$mean$offset <- rep(0,nrow(self$mean$data))
-                         } else {
-                           self$mean$offset <- offset
-                         }
-                         if(is.null(weights)){
-                           self$weights <- rep(1,nrow(self$mean$data))
-                         } else {
-                           self$weights <- weights
-                         }
-                         if(self$family[[1]]=="binomial"){
-                           if(is.null(trials) || all(trials == 1)){
-                             self$trials <- rep(1,nrow(self$mean$data))
-                             self$family[[1]] <- "bernoulli"
                            } else {
-                             self$trials <- trials
+                             if(is(covariance,"R6")){
+                               if(is(covariance,"Covariance")){
+                                 self$covariance <- covariance
+                                 if(is.null(covariance$data)){
+                                   if(is.null(data)){
+                                     stop("No data specified in covariance object or call to function.")
+                                   } else {
+                                     self$covariance$data <- data
+                                   }
+                                 }
+                               } else {
+                                 stop("covariance should be Covariance class or list of appropriate arguments")
+                               }
+                             } else if(is(covariance,"list")){
+                               if(is.null(covariance$formula))stop("A formula must be specified for the covariance")
+                               if(is.null(covariance$data) & is.null(data))stop("No data specified in covariance list or call to function.")
+                               self$covariance <- Covariance$new(
+                                 formula= covariance$formula
+                               )
+                               if(is.null(covariance$data)){
+                                 self$covariance$data <- data
+                               } else {
+                                 self$covariance$data <- covariance$data
+                               }
+                               if(!is.null(covariance$parameters))self$covariance$update_parameters(covariance$parameters)
+                               if(!is.null(covariance$eff_range))self$covariance$eff_range <- covariance$eff_range
+                             }
+                             if(is(mean,"R6")){
+                               if(is(mean,"MeanFunction")){
+                                 self$mean <- mean
+                               } else {
+                                 stop("mean should be MeanFunction class or list of appropriate arguments")
+                               }
+                             } else if(is(mean,"list")){
+                               if(is.null(mean$formula))stop("A formula must be specified for the mean function.")
+                               if(is.null(mean$data) & is.null(data))stop("No data specified in mean list or call to function.")
+                               if(is.null(mean$data)){
+                                 self$mean <- MeanFunction$new(
+                                   formula = mean$formula,
+                                   data = data
+                                 )
+                               } else {
+                                 self$mean <- MeanFunction$new(
+                                   formula = mean$formula,
+                                   data = mean$data
+                                 )
+                               }
+                               if(!is.null(mean$parameters))self$mean$update_parameters(mean$parameters)
+                             }
+                           }
+                           if(is.null(offset)){
+                             self$mean$offset <- rep(0,nrow(self$mean$data))
+                           } else {
+                             self$mean$offset <- offset
+                           }
+                           if(is.null(weights)){
+                             self$weights <- rep(1,nrow(self$mean$data))
+                           } else {
+                             self$weights <- weights
+                           }
+                           if(self$family[[1]]=="binomial"){
+                             if(is.null(trials) || all(trials == 1)){
+                               self$trials <- rep(1,nrow(self$mean$data))
+                               self$family[[1]] <- "bernoulli"
+                             } else {
+                               self$trials <- trials
+                             }
                            }
                          }
+                         private$session_id <- Sys.getpid()
                          private$update_ptr()
+                         
                        },
                        #' @description
                        #' Print method for `Model` class
@@ -373,6 +419,7 @@ Model <- R6::R6Class("Model",
                          cat("\n   \U2223     \U2BA1 Parameters: ",self$covariance$parameters)
                          cat("\n   \U2223     \U2BA1 N random effects: ",ncol(self$covariance$Z))
                          cat("\n   \U2BA1 N:",self$n())
+                         cat("\n")
                        },
                        #' @description
                        #' Returns the number of observations in the model
@@ -533,29 +580,61 @@ Model <- R6::R6Class("Model",
                          }
                        },
                        #' @description
-                       #' Generates the information matrix of the GLS estimator
+                       #' Generates the information matrix of the mixed model GLS estimator (X'S^-1X). The inverse of this matrix is an 
+                       #' estimator for the variance-covariance matrix of the fixed effect parameters. For various small sample corrections
+                       #' see `small_sample_correction()` and `box()`. For models with non-linear functions of fixed effect parameters,
+                       #' a correction to the Hessian matrix is required, which is automatically calculated or optionally returned or disabled. 
                        #' @param include.re logical indicating whether to return the information matrix including the random effects components (TRUE), 
-                       #' or the GLS information matrix for beta only.
-                       #' @return A PxP matrix
-                       information_matrix = function(include.re = FALSE){
-                         if(is.null(private$ptr)){
-                           private$update_ptr()
+                       #' or the mixed model information matrix for beta only (FALSE).
+                       #' @param theta Logical. If TRUE the function will return the variance-coviariance matrix for the covariance parameters and ignore the first argument. Otherwise, the fixed effect
+                       #' parameter information matrix is returned.
+                       #' @param hessian.corr String. If there are non-linear functions of fixed effect parameters then a correction to the Hessian can be applied ("add"), returned on its 
+                       #' own ("return"), or ignored ("none")
+                       #' @param adj.nonspd Logical. For models nonlinear in fixed effect parameters, the Hessian of the linear predictor with respect to the 
+                       #' model parameters is often not positive semi-definite, which can cause a singular matrix and failure to calculate valid standard errors. 
+                       #' The adjustment matrix will be corrected if it is not positive semi-definite and this option is TRUE.
+                        #' @return A matrix
+                       information_matrix = function(include.re = FALSE, theta = FALSE, hessian.corr = "add", adj.nonpsd = TRUE){
+                         private$update_ptr()
+                         nonlin <- Model__any_nonlinear(private$ptr,private$model_type())
+                         if(nonlin){
+                           if(!private$y_has_been_updated) stop("No y data has been added")
+                           if(!hessian.corr %in% c("add","return","none"))stop("hessian.corr must be add, return, or none")
                          }
-                         if(include.re & !private$model_type()>0){
-                           return(Model__obs_information_matrix(private$ptr,private$model_type()))
+                         if(theta){
+                           M <- Model__infomat_theta(private$ptr,private$model_type())
                          } else {
-                           if(private$model_type()==0){
-                             return(Model__information_matrix(private$ptr,private$model_type()))
-                           } else {
-                             return(Model__information_matrix_crude(private$ptr,private$model_type()))
+                           if((nonlin & hessian.corr%in%c("add","none")) | !nonlin){
+                             if(include.re & !private$model_type()>0){
+                               M <- Model__obs_information_matrix(private$ptr,private$model_type())
+                             } else {
+                               if(private$model_type()==0){
+                                 M <- Model__information_matrix(private$ptr,private$model_type())
+                               } else {
+                                 M <- Model__information_matrix_crude(private$ptr,private$model_type())
+                               }
+                             }
+                           }
+                           if(Model__any_nonlinear(private$ptr,private$model_type()) & hessian.corr %in% c("add","return")){
+                             A <- Model__hessian_correction(private$ptr,private$model_type())
+                             if(any(eigen(A)$values < 0) & adj.nonpsd){
+                               if(adj.nonpsd)message("Hessian correction for non-linear parameters is not positive semi-definite and will be adjusted. To disable this feature set adj.nonpsd = FALSE")
+                               A <- near_semi_pd(A)
+                             }
+                             if(hessian.corr == "add"){
+                               M <- M + A
+                             } else {
+                               M <- A
+                             }
                            }
                          }
+                         return(M)
                        },
                        #' @description 
                        #' Returns the robust sandwich variance-covariance matrix for the fixed effect parameters
                        #' @return A PxP matrix
                        sandwich = function(){
-                         if(is.null(private$ptr))private$update_ptr()
+                         private$update_ptr()
                          return(Model__sandwich(private$ptr,private$model_type()))
                        },
                        #' @description 
@@ -569,9 +648,7 @@ Model <- R6::R6Class("Model",
                        #' @param type Either "KR", "KR2", or "sat", see description.
                        #' @return A PxP matrix
                        small_sample_correction = function(type){
-                         if(is.null(private$ptr)){
-                           private$update_ptr()
-                         }
+                         private$update_ptr()
                          if(!type %in% c("KR","KR2","sat"))stop("type must be either KR, KR2, or sat")
                          ss_type <- ifelse(type == "KR",1,ifelse(type == "KR2",4,5))
                          return(Model__small_sample_correction(private$ptr,ss_type,private$model_type()))
@@ -584,9 +661,7 @@ Model <- R6::R6Class("Model",
                        #' @return A data frame.
                        box = function(y){
                          if(!(self$family[[1]]=="gaussian"&self$family[[2]]=="identity"))stop("Box only available for linear models")
-                         if(is.null(private$ptr)){
-                           private$update_ptr()
-                         }
+                         private$update_ptr()
                          if(!missing(y))private$set_y(y)
                          results <- Model__box(private$ptr,private$model_type())
                          results_out <- data.frame(parameter = Model__beta_parameter_names(private$ptr,private$model_type()),
@@ -650,9 +725,7 @@ Model <- R6::R6Class("Model",
                        #' Returns the diagonal of the matrix W used to calculate the covariance matrix approximation
                        #' @return A vector with values of the glm iterated weights
                        w_matrix = function(){
-                         if(is.null(private$ptr)){
-                           private$update_ptr()
-                         }
+                         private$update_ptr()
                          private$genW()
                          return(private$W)
                        },
@@ -670,13 +743,11 @@ Model <- R6::R6Class("Model",
                        #' @param inverse Logical indicating whether to provide the covariance matrix or its inverse
                        #' @return A matrix.
                        Sigma = function(inverse = FALSE){
-                         if(is.null(private$ptr)){
-                           private$update_ptr()
-                         }
+                         private$update_ptr()
                          return(Model__Sigma(private$ptr,inverse,private$model_type()))
                        },
                        #'@description
-                       #'Markov Chain Monte Carlo Maximum Likelihood  model fitting
+                       #'Stochastic Maximum Likelihood model fitting
                        #'
                        #'@details
                        #'**Stochastic maximum likelihood**
@@ -887,7 +958,7 @@ Model <- R6::R6Class("Model",
                            cat("\nStarting Beta (GLM): ", round(beta,5))
                            cat("\n",Reduce(paste0,rep("-",40)),"\n")
                          }
-                         Model__saem(private$ptr, method == "saem", self$mcmc_options$samps, alpha, pr.average, private$model_type())
+                         Model__set_sml_parameters(private$ptr, method == "saem", self$mcmc_options$samps, alpha, pr.average, private$model_type())
                          # START THE MAIN ALGORITHM
                          while(!converged & iter < max.iter){
                            if(iter > 0){
@@ -947,7 +1018,7 @@ Model <- R6::R6Class("Model",
                              }
                              Model__update_u(private$ptr,t(dsamps),append_u,private$model_type())
                            } else {
-                             Model__mcmc_sample(private$ptr, self$mcmc_options$warmup, n_mcmc_sampling, self$mcmc_options$adapt,private$model_type())
+                             Model__mcmc_sample(private$ptr, self$mcmc_options$warmup, n_mcmc_sampling, self$mcmc_options$adapt, private$model_type())
                            }
                            if(private$trace==2)t2 <- Sys.time()
                            if(private$trace==2)cat("\nMCMC sampling took: ",t2-t1,"s")
@@ -975,7 +1046,7 @@ Model <- R6::R6Class("Model",
                            theta_diff <- max(abs(theta-theta_new))
                            fn_counter <- Model__get_fn_counter(private$ptr,private$model_type())
                            if(conv.criterion == 1){
-                             converged <- !(beta_diff > algo_tol[1] & theta_diff > algo_tol[2])
+                             converged <- !(beta_diff > algo_tol[1]) & !(theta_diff > algo_tol[2])
                            } 
                            if(iter > 1){
                              udiagnostic <- Model__u_diagnostic(private$ptr,private$model_type())
@@ -1019,22 +1090,15 @@ Model <- R6::R6Class("Model",
                            }
                          }
                          if(!converged)message(paste0("Algorithm not converged. Max. difference between iterations :",round(max(abs(all_pars-all_pars_new)),4)))
-                         # if(sim.lik.step){
-                         #   if(private$trace >= 1)cat("\n\n")
-                         #   if(private$trace >= 1)message("Optimising simulated likelihood")
-                         #   Model__ml_all(private$ptr,0,private$model_type())
-                         #   beta_new <- Model__get_beta(private$ptr,private$model_type())
-                         #   theta_new <- Model__get_theta(private$ptr,private$model_type())
-                         #   var_par_new <- Model__get_var_par(private$ptr,private$model_type())
-                         # }
                          self$update_parameters(mean.pars = beta_new,
                                                 cov.pars = theta_new)
                          if(private$trace >= 1)cat("\n\nCalculating standard errors...\n")
                          self$var_par <- var_par_new
-                         u <- Model__u(private$ptr, TRUE,private$model_type())
+                         u <- Model__u(private$ptr,TRUE,private$model_type())
                          if(private$model_type()==0){
                            if(se == "gls" || se == "bw" || se == "box"){
-                             M <- Matrix::solve(Model__obs_information_matrix(private$ptr,private$model_type()))[1:length(beta),1:length(beta)]
+                             M <- self$information_matrix() #Matrix::solve(Model__obs_information_matrix(private$ptr,private$model_type()))[1:length(beta),1:length(beta)]
+                             M <- solve(M)
                              if(se.theta){
                                SE_theta <- tryCatch(sqrt(diag(solve(Model__infomat_theta(private$ptr,private$model_type())))), error = rep(NA, ncovpar))
                              } else {
@@ -1043,7 +1107,7 @@ Model <- R6::R6Class("Model",
                            } else if(se == "robust" || se == "bwrobust"){
                              M <- Model__sandwich(private$ptr,private$model_type())
                              if(se.theta){
-                               SE_theta <- tryCatch(sqrt(diag(solve(Model__infomat_theta(private$ptr,private$model_type())))), error = rep(NA, ncovpar))
+                               SE_theta <- tryCatch(sqrt(diag(Model__infomat_theta(private$ptr,private$model_type()))), error = rep(NA, ncovpar))
                              } else {
                                SE_theta <- rep(NA, ncovpar)
                              }
@@ -1056,7 +1120,7 @@ Model <- R6::R6Class("Model",
                          } else {
                            # crudely calculate the information matrix for GP approximations - this will be integrated into the main
                            # library in future versions, but can cause error/crash with the above methods
-                           M <- Model__information_matrix_crude(private$ptr,private$model_type())
+                           M <- self$information_matrix()#Model__information_matrix_crude(private$ptr,private$model_type())
                            nB <- nrow(M)
                            M <- tryCatch(solve(M), error = matrix(NA,nrow = nB,ncol=nB))
                            SE_theta <- rep(NA, ncovpar)
@@ -1110,7 +1174,11 @@ Model <- R6::R6Class("Model",
                            res$upper <- res$est + qnorm(1-0.05/2)*res$SE
                          }
                          repar_table <- repar_table[!duplicated(repar_table$id),]
-                         rownames(u) <- rep(repar_table$term,repar_table$count)
+                         if(private$model_type()!=2){
+                           rownames(u) <- rep(repar_table$term,repar_table$count)
+                         } else {
+                           if(nrow(repar_table)==1) rownames(u) <-  rep(repar_table$term,nrow(u))
+                         }
                          aic <- ifelse(private$model_type()==0 , Model__aic(private$ptr,private$model_type()),NA)
                          xb <- Model__xb(private$ptr,private$model_type())
                          zd <- self$covariance$Z %*% rowMeans(u)
@@ -1126,6 +1194,7 @@ Model <- R6::R6Class("Model",
                                      sim_lik = FALSE, #sim.lik.step,
                                      aic = aic,
                                      se=se,
+                                     vcov = M,
                                      Rsq = c(cond = condR2,marg=margR2),
                                      logl = llvals$first,
                                      logl_theta = llvals$second,
@@ -1139,7 +1208,13 @@ Model <- R6::R6Class("Model",
                                      P = length(self$mean$parameters),
                                      Q = length(self$covariance$parameters),
                                      var_par_family = var_par_family,
-                                     y=y,
+                                     model_data = list(
+                                       y=y,
+                                       data = private$model_data_frame(),
+                                       trials = self$trials,
+                                       offset = self$mean$offset,
+                                       weights = self$weights
+                                     ),
                                      fn_count = fn_counter)
                          class(out) <- "mcml"
                          return(out)
@@ -1200,16 +1275,17 @@ Model <- R6::R6Class("Model",
                        #'@md
                        LA = function(y,
                                      start,
-                                     method = "nloptim",
+                                     method = "nr",
                                      se = "gls",
                                      max.iter = 40,
                                      tol = 1e-4,
                                      se.theta = TRUE,
-                                     algo = ifelse(self$mean$any_nonlinear(),2,1),
+                                     algo = 2,
                                      lower.bound = NULL,
                                      upper.bound = NULL,
                                      lower.bound.theta = NULL,
                                      upper.bound.theta = NULL){
+                         
                          private$verify_data(y)
                          private$set_y(y)
                          Model__use_attenuation(private$ptr,private$attenuate_parameters,private$model_type())
@@ -1292,7 +1368,8 @@ Model <- R6::R6Class("Model",
                          u <- Model__u(private$ptr,TRUE,private$model_type())
                          if(private$trace >= 1)cat("\n\nCalculating standard errors...\n")
                          if(se == "gls" || se =="bw" || se == "box"){
-                           M <- Matrix::solve(Model__obs_information_matrix(private$ptr,private$model_type()))[1:length(beta),1:length(beta)]
+                           M <- self$information_matrix()#Matrix::solve(Model__obs_information_matrix(private$ptr,private$model_type()))[1:length(beta),1:length(beta)]
+                           M <- solve(M)
                            if(se.theta){
                              SE_theta <- tryCatch(sqrt(diag(solve(Model__infomat_theta(private$ptr,private$model_type())))), error = rep(NA, ncovpar))
                            } else {
@@ -1301,7 +1378,7 @@ Model <- R6::R6Class("Model",
                          } else if(se == "robust" || se == "bwrobust" ){
                            M <- Model__sandwich(private$ptr,private$model_type())
                            if(se.theta){
-                             SE_theta <- tryCatch(sqrt(diag(solve(Model__infomat_theta(private$ptr,private$model_type())))), error = rep(NA, ncovpar))
+                             SE_theta <- tryCatch(sqrt(diag(Model__infomat_theta(private$ptr,private$model_type()))), error = rep(NA, ncovpar))
                            } else {
                              SE_theta <- rep(NA, ncovpar)
                            }
@@ -1377,6 +1454,7 @@ Model <- R6::R6Class("Model",
                                      sim_lik = FALSE,
                                      aic = aic,
                                      se =se ,
+                                     vcov = M,
                                      Rsq = c(cond = condR2,marg=margR2),
                                      mean_form = self$mean$formula,
                                      cov_form = self$covariance$formula,
@@ -1389,7 +1467,13 @@ Model <- R6::R6Class("Model",
                                      P = length(self$mean$parameters),
                                      Q = length(self$covariance$parameters),
                                      var_par_family = var_par_family,
-                                     y = y)
+                                     model_data = list(
+                                       y=y,
+                                       data = private$model_data_frame(),
+                                       trials = self$trials,
+                                       offset = self$mean$offset,
+                                       weights = self$weights
+                                     ))
                          class(out) <- "mcml"
                          return(out)
                        },
@@ -1422,18 +1506,16 @@ Model <- R6::R6Class("Model",
                        #' of effective samples per unit time. cmdstanr will compile the MCMC programs to the library folder the first time they are run, 
                        #' so may not currently be an option for some users.
                        #' @return A matrix of samples of the random effects
-                       mcmc_sample = function(mcmc.pkg = "cmdstan"){
+                       mcmc_sample = function(mcmc.pkg = "rstan"){
                          if(!mcmc.pkg %in% c("cmdstan","rstan","hmc"))stop("mcmc.pkg must be one of cmdstan, rstan, or hmc")
-                         private$verify_data(y)
-                         private$set_y(y)
-                         if(mcmc.pkg == "cmdstan"){
-                           file_type <- mcnr_family(self$family,self$mcmc_options$use_cmdstan)
-                           if(self$mcmc_options$use_cmdstan){
+                         if(!private$y_has_been_updated) stop("No y data has been added")
+                         if(mcmc.pkg == "cmdstan" | mcmc.pkg == "rstan"){
+                           file_type <- mcnr_family(self$family,mcmc.pkg == "cmdstan")
+                           if(mcmc.pkg == "cmdstan"){
                              if(!requireNamespace("cmdstanr")){
-                               stop("cmdstanr is required to use Stan for sampling. See https://mc-stan.org/cmdstanr/ for details on how to install.\n
-                                    Set option usestan=FALSE to use the in-built MCMC sampler.")
+                               stop("cmdstanr is required to use cmdstan for sampling. See https://mc-stan.org/cmdstanr/ for details on how to install.")
                              } else {
-                               if(verbose)message("If this is the first time running this model, it will be compiled by cmdstan.")
+                               if(private$trace>=1)message("If this is the first time running this model, it will be compiled by cmdstan.")
                                model_file <- system.file("cmdstan",
                                                          file_type$file,
                                                          package = "glmmrBase",
@@ -1446,14 +1528,15 @@ Model <- R6::R6Class("Model",
                              Q = Model__Q(private$ptr,private$model_type()),
                              Xb = Model__xb(private$ptr,private$model_type()),
                              Z = Model__ZL(private$ptr,private$model_type()),
-                             y = y,
+                             y = Model__y(private$ptr,private$model_type()),
                              type=as.numeric(file_type$type)
                            )
                            if(self$family[[1]]=="gaussian")data <- append(data,list(sigma = self$var_par/self$weights))
                            if(self$family[[1]]=="binomial")data <- append(data,list(n = self$trials))
                            if(self$family[[1]]%in%c("beta","Gamma"))data <- append(data,list(var_par = self$var_par))
                            if(private$trace <= 1){
-                             if(self$mcmc_options$use_cmdstan){
+                             if(private$trace==1)message("Starting MCMC sampling. Set self$trace(2) for detailed output")
+                             if(mcmc.pkg == "cmdstan"){
                                capture.output(fit <- mod$sample(data = data,
                                                                 chains = 1,
                                                                 iter_warmup = self$mcmc_options$warmup,
@@ -1470,19 +1553,19 @@ Model <- R6::R6Class("Model",
                                               file=tempfile())
                              }
                            } else {
-                             if(self$mcmc_options$use_cmdstan){
+                             if(mcmc.pkg == "cmdstan"){
                                fit <- mod$sample(data = data,
                                                  chains = 1,
                                                  iter_warmup = self$mcmc_options$warmup,
                                                  iter_sampling = self$mcmc_options$samps,
-                                                 refresh = 0)
+                                                 refresh = 50)
                              } else {
                                fit <- rstan::sampling(stanmodels[[file_type$file]],
                                                       data=data,
                                                       chains=1,
                                                       iter = self$mcmc_options$warmup+self$mcmc_options$samps,
                                                       warmup = self$mcmc_options$warmup,
-                                                      refresh = 0)
+                                                      refresh = 50)
                              }
                            }
                            if(mcmc.pkg == "cmdstan"){
@@ -1492,6 +1575,7 @@ Model <- R6::R6Class("Model",
                              dsamps <- rstan::extract(fit,"gamma",FALSE)
                              dsamps <- as.matrix(dsamps[,1,])
                            }
+                           if(private$trace==1)message("Sampling complete, updating model")
                            Model__update_u(private$ptr,as.matrix(t(dsamps)),private$model_type())
                            dsamps <- Matrix::Matrix(Model__L(private$ptr, private$model_type()) %*% Matrix::t(dsamps)) #check this
                          } else {
@@ -1510,14 +1594,26 @@ Model <- R6::R6Class("Model",
                        #' the model parameters. The random effects are on the N(0,I) scale, i.e. scaled by the
                        #' Cholesky decomposition of the matrix D. To obtain the random effects from the last 
                        #' model fit, see member function `$u`
-                       #' @param y Vector of outcome data
-                       #' @param u Vector of random effects scaled by the Cholesky decomposition of D
+                       #' @param y (optional) Vector of outcome data, if not specified then data must have been set in another function.
+                       #' @param u (optional) Vector of random effects scaled by the Cholesky decomposition of D
                        #' @param beta Logical. Whether the log gradient for the random effects (FALSE) or for the linear predictor parameters (TRUE)
                        #' @return A vector of the gradient
                        gradient = function(y,u,beta=FALSE){
-                         private$verify_data(y)
-                         private$set_y(y)
-                         grad <- Model__log_gradient(private$ptr,u,beta, private$model_type())
+                         if(!missing(y)){
+                           private$verify_data(y)
+                           private$set_y(y)
+                         } else {
+                           if(!private$y_has_been_updated) stop("No y data has been added")
+                         }
+                         if(missing(u)){
+                           u_in <- Model__u(private$ptr, FALSE, private$model_type())
+                         } else {
+                           u_in <- u
+                         }
+                         grad <- matrix(NA,ifelse(beta,ncol(self$mean$X),nrow(u_in)),ncol(u_in))
+                         for(i in 1:ncol(u)){
+                           grad[,i] <- Model__log_gradient(private$ptr,u_in,beta, private$model_type())
+                         }
                          return(grad)
                        },
                        #' @description 
@@ -1530,18 +1626,23 @@ Model <- R6::R6Class("Model",
                        #' (sigma, d(1), d(2), d(3), d2(1,1), d2(1,2), d2(1,3), d2(2,2), d2(2,3), d2(3,3)).
                        #' @return A list of matrices, see description for contents of the list.
                        partial_sigma = function(){
-                         if(is.null(private$ptr))private$update_ptr()
+                         private$update_ptr()
                          out <- Model__cov_deriv(private$ptr, private$model_type())
                          return(out)
                        },
                        #' @description 
-                       #' Returns the sample of random effects from the last model fit
-                       #' @param scaled Logical indicating whether to return samples on the N(0,I) scale (`scaled=FALSE`) or
+                       #' Returns the sample of random effects from the last model fit, or updates the samples for the model.
+                       #' @param scaled Logical indicating whether the samples are on the N(0,I) scale (`scaled=FALSE`) or
                        #' N(0,D) scale (`scaled=TRUE`)
+                       #' @param u (optional) Matrix of random effect samples. If provided then the internal samples are replaced with these values. These samples should be N(0,I).
                        #' @return A matrix of random effect samples
-                       u = function(scaled = TRUE){
+                       u = function(scaled = TRUE, u){
                          if(is.null(private$ptr))stop("Model not set")
-                         return(Model__u(private$ptr,scaled, private$model_type()))
+                         if(missing(u)){
+                           return(Model__u(private$ptr,scaled, private$model_type()))
+                         } else {
+                           Model__update_u(private$ptr,u,FALSE,private$model_type()) 
+                         }
                        },
                        #' @description 
                        #' The log likelihood for the GLMM. The random effects can be left 
@@ -1552,9 +1653,13 @@ Model <- R6::R6Class("Model",
                        #' @param u An optional matrix of random effect samples. This can be a single column.
                        #' @return The log-likelihood of the model parameters
                        log_likelihood = function(y,u){
-                         private$verify_data(y)
-                         private$set_y(y)
-                         if(!missing(u))Model__update_u(private$ptr,u, private$model_type())
+                         if(!missing(y)){
+                           private$verify_data(y)
+                           private$set_y(y)
+                         } else {
+                           if(!private$y_has_been_updated) stop("No y data has been added")
+                         }
+                         if(!missing(u)) Model__update_u(private$ptr,u, private$model_type())
                          return(Model__log_likelihood(private$ptr, private$model_type()))
                        },
                        #' @field mcmc_options There are five options for MCMC sampling that are specified in this list:
@@ -1580,16 +1685,15 @@ Model <- R6::R6Class("Model",
                                            target_accept = 0.95,
                                            adapt = 50),
                        #' @description
-                       #' Prints the internal instructions used to calculate the linear predictor and/or
-                       #' the log likelihood. Internally the class uses a reverse polish notation to store and 
+                       #' Prints the internal instructions and data used to calculate the linear predictor. 
+                       #' Internally the class uses a reverse polish notation to store and 
                        #' calculate different functions, including user-specified non-linear mean functions. This 
                        #' function will print all the steps. Mainly used for debugging and determining how the 
                        #' class has interpreted non-linear model specifications. 
-                       #' @param linpred Logical. Whether to print the linear predictor instructions.
-                       #' @param loglik Logical. Whether to print the log-likelihood instructions.
                        #' @return None. Called for effects.
-                       calculator_instructions = function(linpred = TRUE, loglik = FALSE){
-                         Model__print_instructions(private$ptr,linpred,loglik,private$model_type())
+                       calculator_instructions = function(){
+                         Model__print_names(private$ptr,TRUE, TRUE, private$model_type())
+                         Model__print_instructions(private$ptr,private$model_type())
                        },
                        #' @description
                        #' Calculates the marginal effect of variable x. There are several options for 
@@ -1672,6 +1776,7 @@ Model <- R6::R6Class("Model",
                        Xb = NULL,
                        trace = 0,
                        useSparse = TRUE,
+                       session_id = NULL,
                        logit = function(x){
                          exp(x)/(1+exp(x))
                        },
@@ -1681,16 +1786,18 @@ Model <- R6::R6Class("Model",
                        },
                        attenuate_parameters = FALSE,
                        ptr = NULL,
+                       y_has_been_updated = FALSE,
                        set_y = function(y){
-                         if(is.null(private$ptr))private$update_ptr()
+                         private$update_ptr()
                          Model__set_y(private$ptr,y, private$model_type())
+                         private$y_has_been_updated <- TRUE
                        },
                        model_type = function(){
                          type <- self$covariance$.__enclos_env__$private$type
                          return(type)
                        },
                        update_ptr = function(force = FALSE){
-                         if(is.null(private$ptr) | force){
+                         if(is.null(private$ptr) | force | private$session_id != Sys.getpid()){
                            if(!self$family[[1]]%in%c("poisson","binomial","gaussian","bernoulli","Gamma","beta"))stop("family must be one of Poisson, Binomial, Gaussian, Gamma, Beta")
                            if(gsub(" ","",self$mean$formula) != gsub(" ","",self$covariance$formula)){
                              form <- paste0(self$mean$formula,"+",self$covariance$formula)
@@ -1748,6 +1855,7 @@ Model <- R6::R6Class("Model",
                            # set covariance pointer
                            self$covariance$.__enclos_env__$private$model_ptr <- private$ptr
                            self$covariance$.__enclos_env__$private$ptr <- NULL
+                           private$session_id <- Sys.getpid()
                          }
                        },
                        verify_data = function(y){
@@ -1796,6 +1904,14 @@ Model <- R6::R6Class("Model",
                          }
                          newdat <- newdat[,cnames]
                          return(newdat)
+                       },
+                       model_data_frame = function(){
+                         cnames <- colnames(self$mean$data)
+                         dat <- self$mean$data
+                         if(any(!colnames(self$covariance$data)%in%cnames)){
+                           dat <- cbind(dat, self$covariance$data[,which(!colnames(self$mean$data)%in%cnames)])
+                         }
+                         return(dat)
                        }
                      ))
 
