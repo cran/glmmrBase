@@ -1,8 +1,8 @@
 Package: glmmrBase
 Type: Package
 Title: Generalised Linear Mixed Models in R
-Version: 0.9.2
-Date: 2024-06-19
+Version: 0.10.5
+Date: 2024-09-04
 Authors@R: c(person("Sam", "Watson", email = "S.I.Watson@bham.ac.uk",
                   role = c("aut", "cre")))
 Description: Specification, analysis, simulation, and fitting of generalised linear mixed models. 
@@ -27,7 +27,7 @@ SystemRequirements: GNU make
 Encoding: UTF-8
 Config/testthat/edition: 3
 LazyData: true
-Packaged: 2024-06-19 09:14:43 UTC; WatsonSI
+Packaged: 2024-09-07 15:14:16 UTC; samue
 Maintainer: Sam Watson <S.I.Watson@bham.ac.uk>
 Repository: CRAN
-Date/Publication: 2024-06-19 12:30:02 UTC
+Date/Publication: 2024-09-07 22:20:02 UTC

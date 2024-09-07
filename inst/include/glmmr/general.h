@@ -17,6 +17,10 @@
 #endif
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS 
 #define EIGEN_DEFAULT_DENSE_INDEX_TYPE int
+
+//glmmrbase version 
+#define GLMMR10
+
 // includes
 
 #include <vector>
@@ -95,7 +99,9 @@ enum class Fam {
     poisson = 2,
     gamma = 3,
     beta = 4,
-    binomial = 5
+    binomial = 5,
+    quantile = 6, // quantile is the asymmetric Laplacian distribution
+    quantile_scaled = 7
 };
 
 enum class Link {
@@ -113,7 +119,9 @@ const std::map<str, Fam> str_to_family = {
   {"gamma",Fam::gamma},
   {"Gamma",Fam::gamma},
   {"beta",Fam::beta},
-  {"binomial",Fam::binomial}
+  {"binomial",Fam::binomial},
+  {"quantile",Fam::quantile},
+  {"quantile_scaled",Fam::quantile_scaled}
 };
 
 const std::map<str, Link> str_to_link = {

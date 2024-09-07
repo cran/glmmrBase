@@ -605,6 +605,18 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// Model__set_quantile
+void Model__set_quantile(SEXP xp, double q, int type);
+RcppExport SEXP _glmmrBase_Model__set_quantile(SEXP xpSEXP, SEXP qSEXP, SEXP typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
+    Rcpp::traits::input_parameter< double >::type q(qSEXP);
+    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
+    Model__set_quantile(xp, q, type);
+    return R_NilValue;
+END_RCPP
+}
 // Model__use_attenuation
 void Model__use_attenuation(SEXP xp, SEXP use_, int type);
 RcppExport SEXP _glmmrBase_Model__use_attenuation(SEXP xpSEXP, SEXP use_SEXP, SEXP typeSEXP) {
@@ -1637,6 +1649,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// hessian_from_formula
+SEXP hessian_from_formula(SEXP form_, SEXP data_, SEXP colnames_, SEXP parameters_);
+RcppExport SEXP _glmmrBase_hessian_from_formula(SEXP form_SEXP, SEXP data_SEXP, SEXP colnames_SEXP, SEXP parameters_SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type form_(form_SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type data_(data_SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type colnames_(colnames_SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type parameters_(parameters_SEXP);
+    rcpp_result_gen = Rcpp::wrap(hessian_from_formula(form_, data_, colnames_, parameters_));
+    return rcpp_result_gen;
+END_RCPP
+}
 // setParallel
 void setParallel(SEXP parallel_, int cores_);
 RcppExport SEXP _glmmrBase_setParallel(SEXP parallel_SEXP, SEXP cores_SEXP) {
@@ -1719,6 +1745,7 @@ RcppExport SEXP _rcpp_module_boot_stan_fit4mcml_binomial_mod();
 RcppExport SEXP _rcpp_module_boot_stan_fit4mcml_gamma_mod();
 RcppExport SEXP _rcpp_module_boot_stan_fit4mcml_gaussian_mod();
 RcppExport SEXP _rcpp_module_boot_stan_fit4mcml_poisson_mod();
+RcppExport SEXP _rcpp_module_boot_stan_fit4mcml_quantile_mod();
 
 static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Covariance__new", (DL_FUNC) &_glmmrBase_Covariance__new, 3},
@@ -1768,6 +1795,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__update_beta", (DL_FUNC) &_glmmrBase_Model__update_beta, 3},
     {"_glmmrBase_Model__update_theta", (DL_FUNC) &_glmmrBase_Model__update_theta, 3},
     {"_glmmrBase_Model__update_u", (DL_FUNC) &_glmmrBase_Model__update_u, 4},
+    {"_glmmrBase_Model__set_quantile", (DL_FUNC) &_glmmrBase_Model__set_quantile, 3},
     {"_glmmrBase_Model__use_attenuation", (DL_FUNC) &_glmmrBase_Model__use_attenuation, 3},
     {"_glmmrBase_Model__update_W", (DL_FUNC) &_glmmrBase_Model__update_W, 2},
     {"_glmmrBase_Model__get_W", (DL_FUNC) &_glmmrBase_Model__get_W, 2},
@@ -1851,6 +1879,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__cov_deriv", (DL_FUNC) &_glmmrBase_Model__cov_deriv, 2},
     {"_glmmrBase_Model__predict", (DL_FUNC) &_glmmrBase_Model__predict, 5},
     {"_glmmrBase_Model__predict_re", (DL_FUNC) &_glmmrBase_Model__predict_re, 5},
+    {"_glmmrBase_hessian_from_formula", (DL_FUNC) &_glmmrBase_hessian_from_formula, 4},
     {"_glmmrBase_setParallel", (DL_FUNC) &_glmmrBase_setParallel, 2},
     {"_glmmrBase_re_names", (DL_FUNC) &_glmmrBase_re_names, 2},
     {"_glmmrBase_attenuate_xb", (DL_FUNC) &_glmmrBase_attenuate_xb, 4},
@@ -1863,6 +1892,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_rcpp_module_boot_stan_fit4mcml_gamma_mod", (DL_FUNC) &_rcpp_module_boot_stan_fit4mcml_gamma_mod, 0},
     {"_rcpp_module_boot_stan_fit4mcml_gaussian_mod", (DL_FUNC) &_rcpp_module_boot_stan_fit4mcml_gaussian_mod, 0},
     {"_rcpp_module_boot_stan_fit4mcml_poisson_mod", (DL_FUNC) &_rcpp_module_boot_stan_fit4mcml_poisson_mod, 0},
+    {"_rcpp_module_boot_stan_fit4mcml_quantile_mod", (DL_FUNC) &_rcpp_module_boot_stan_fit4mcml_quantile_mod, 0},
     {NULL, NULL, 0}
 };
 

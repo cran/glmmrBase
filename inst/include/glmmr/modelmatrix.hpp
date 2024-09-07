@@ -791,6 +791,89 @@ inline void glmmr::ModelMatrix<modeltype>::gradient_eta(const VectorXd &v,
     }
     break;
   }
+  case Fam::quantile: case Fam::quantile_scaled: 
+    {
+    switch(model.family.link){
+      case Link::identity:
+        // size_n_array = (model.data.y.array() - size_n_array);
+        if(model.family.family == Fam::quantile_scaled) size_n_array *= 1.0/model.data.var_par;
+        for(int i = 0; i < model.n(); i++){
+          if(size_n_array(i) <= 0){
+            size_n_array(i) *= model.family.quantile - 1;
+          } else {
+            size_n_array(i) *= model.family.quantile;
+          }
+        }
+        break;
+    case Link::loglink:
+      {
+        // ArrayXd resid = (model.data.y.array() - size_n_array.exp());
+        size_n_array = size_n_array.exp();
+        if(model.family.family == Fam::quantile_scaled) size_n_array *= 1.0/model.data.var_par;
+        for(int i = 0; i < model.n(); i++){
+          if(size_n_array(i) <= 0){
+            size_n_array(i) *= model.family.quantile - 1;
+          } else {
+            size_n_array(i) *= model.family.quantile;
+          }
+        }
+        break;
+      }
+    case Link::logit:
+    {
+      ArrayXd logitxb = size_n_array.exp();
+      logitxb += 1.0;
+      logitxb = logitxb.inverse();
+      logitxb *= size_n_array.exp();
+      //ArrayXd resid = (model.data.y.array() - logitxb);
+      logitxb *= (1+size_n_array.exp()).inverse();
+      if(model.family.family == Fam::quantile_scaled) size_n_array *= 1.0/model.data.var_par;
+      for(int i = 0; i < model.n(); i++){
+        if(size_n_array(i) <= 0){
+          size_n_array(i) = model.family.quantile - 1;
+        } else {
+          size_n_array(i) = model.family.quantile;
+        }
+        size_n_array(i) *= logitxb(i);
+      }
+      
+      break;
+    }
+    case Link::probit:
+      {
+      ArrayXd n_array2(model.n());
+      if(model.family.family == Fam::quantile_scaled) size_n_array *= 1.0/model.data.var_par;
+      boost::math::normal norm(0, 1);
+      for (int i = 0; i < model.n(); i++) {
+        n_array2(i) = (double)pdf(norm, size_n_array(i)) / ((double)cdf(norm, size_n_array(i)));
+        if(size_n_array(i) <= 0){
+          size_n_array(i) = model.family.quantile - 1;
+        } else {
+          size_n_array(i) = model.family.quantile;
+        }
+        size_n_array(i) *= n_array2(i);
+      }
+      break;
+      }
+    case Link::inverse:
+      {
+        ArrayXd logitxb = size_n_array.inverse();
+        logitxb *= size_n_array.inverse();
+        if(model.family.family == Fam::quantile_scaled) size_n_array *= 1.0/model.data.var_par;
+        for(int i = 0; i < model.n(); i++){
+          if(size_n_array(i) <= 0){
+            size_n_array(i) = model.family.quantile - 1;
+          } else {
+            size_n_array(i) = model.family.quantile;
+          }
+          size_n_array(i) *= logitxb(i);
+        }
+        
+        break;
+      }
+    }
+    break;
+    }
   }
 }
 
@@ -805,7 +888,7 @@ inline VectorXd glmmr::ModelMatrix<modeltype>::log_gradient(const VectorXd &v,
   ZLt.transpose();
   
   switch(model.family.family){
-  case Fam::poisson: case Fam::bernoulli: case Fam::binomial: case Fam::beta: 
+  case Fam::poisson: case Fam::bernoulli: case Fam::binomial: case Fam::beta: case Fam::quantile: case Fam::quantile_scaled:
   {
     if(betapars){
     size_p_array =  (model.linear_predictor.X().transpose()*size_n_array.matrix()).array();
@@ -1007,6 +1090,64 @@ inline MatrixXd glmmr::ModelMatrix<modeltype>::hessian_nonlinear_correction(){
       xb_ind(i) = exp(xb_ind(i))/(exp(xb_ind(i))+1);
       xb_ind(i) = (xb_ind(i)/(1+exp(xb_ind(i)))) * model.data.var_par * (log(model.data.y(i)) - log(1- model.data.y(i)) - boost::math::digamma(xb_ind(i)*model.data.var_par) + boost::math::digamma((1-xb_ind(i))*model.data.var_par));
     }
+      break;
+    }
+    case Fam::quantile: case Fam::quantile_scaled:
+    {
+          switch(model.family.link){
+        case Link::identity:
+          xb_ind = (model.data.y.array() - xb_ind);
+          if(model.family.family == Fam::quantile_scaled) xb_ind *= model.data.var_par;
+          for(int i = 0; i < model.n(); i++){
+            xb_ind(i) = 0.5*xb_ind(i)/abs(xb_ind(i)) - 0.5*(2*model.family.quantile - 1);
+          }
+          break;
+        case Link::loglink:
+        {
+          ArrayXd resid = (model.data.y.array() - xb_ind.exp());
+          if(model.family.family == Fam::quantile_scaled) resid *= model.data.var_par;
+          for(int i = 0; i < model.n(); i++){
+            xb_ind(i) = 0.5*resid(i)*exp(xb_ind(i))/abs(resid(i)) - 0.5*(2*model.family.quantile - 1)*exp(xb_ind(i));
+          }
+          break;
+        }
+        case Link::logit:
+        {
+          ArrayXd logitxb = xb_ind.exp();
+          logitxb += 1.0;
+          logitxb = logitxb.inverse();
+          logitxb *= xb_ind.exp();
+          ArrayXd resid = (model.data.y.array() - logitxb);
+          logitxb *= (1+xb_ind.exp()).inverse();
+          if(model.family.family == Fam::quantile_scaled) resid *= model.data.var_par;
+          for(int i = 0; i < model.n(); i++){
+            xb_ind(i) = 0.5*logitxb(i)*(resid(i)/abs(resid(i)) - (2*model.family.quantile - 1));
+          }
+          break;
+        }
+        case Link::probit:
+        {
+          ArrayXd n_array2(model.n());
+          boost::math::normal norm(0, 1);
+          for (int i = 0; i < model.n(); i++) {
+            n_array2(i) = (double)pdf(norm, xb_ind(i)) / ((double)cdf(norm, xb_ind(i)));
+            xb_ind(i) = model.data.y(i) - ((double)cdf(norm, xb_ind(i)));
+            xb_ind(i) = 0.5*n_array2(i)*(xb_ind(i)/abs(xb_ind(i)) - (2*model.family.quantile - 1));
+          }
+          break;
+        }
+        case Link::inverse:
+        {
+          ArrayXd logitxb = xb_ind.inverse();
+          ArrayXd resid = (model.data.y.array() - logitxb);
+          logitxb *= xb_ind.inverse();
+          if(model.family.family == Fam::quantile_scaled) resid *= model.data.var_par;
+          for(int i = 0; i < model.n(); i++){
+            xb_ind(i) = 0.5*logitxb(i)*(resid(i)/abs(resid(i)) - (2*model.family.quantile - 1));
+          }
+          break;
+        }
+        }
       break;
     }
     }

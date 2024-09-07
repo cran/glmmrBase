@@ -1,15 +1,21 @@
 #' A GLMM Model
 #'
-#' A generalised linear mixed model and a range of associated functions
+#' A generalised linear mixed model 
 #' @details
-#' A detailed vingette for this package is available online<doi:10.48550/arXiv.2303.12657>. Briefly, for the generalised linear mixed model
+#' See \link[glmmrBase]{glmmrBase-package} for a more in-depth guide.
+#'
+#' The generalised linear mixed model is:
 #'
 #' \deqn{Y \sim F(\mu,\sigma)}
 #' \deqn{\mu = h^-1(X\beta + Zu)}
 #' \deqn{u \sim MVN(0,D)}
 #'
-#' where h is the link function. The class provides access to all of the matrices above and associated calculations and functions including model fitting, power analysis,
-#' and various relevant decompositions. The object is an R6 class and so can serve as a parent class for extended functionality.
+#' where F is a distribution with scale parameter \deqn{\sigma}, h is a link function, X are the fixed effects with parameters \deqn{\beta}, Z is the random effect design matrix with multivariate Gaussian distributed effects u. 
+#' The class provides access to all of the elements of the model above and associated calculations and functions including model fitting, power analysis,
+#' and various relevant matrices, including information matrices and related corrections. The object is an R6 class and so can serve as a parent class for extended functionality.
+#'
+#' The currently support families (links) are Gaussian (identity, log), Binomial (logit, log, probit, identity), Poisson (log, identity), Gamma (logit, identity, inverse), and Beta (logit). The class also supports mixed quantile 
+#' regression models, although functionality is currently experimental. Quantile models use an asymmetrical Laplace distribution for the likelihood and support all five link functions listed before. 
 #'
 #' Many calculations use the covariance matrix of the observations, such as the information matrix, which is used in power calculations and
 #' other functions. For non-Gaussian models, the class uses the first-order approximation proposed by Breslow and Clayton (1993) based on the
@@ -23,11 +29,7 @@
 #' improve the accuracy of approximations based on the marginal quasilikelihood is also available, see `use_attenuation()`.
 #'
 #' See \href{https://github.com/samuel-watson/glmmrBase/blob/master/README.md}{glmmrBase} for a
-#' detailed guide on model specification.
-#' 
-#' The class also includes model fitting with Markov Chain Monte Carlo Maximum Likelihood implementing the algorithms described by McCulloch (1997), 
-#' and fast model fitting using Laplace approximation. Functions for returning related values such as the log gradient, log probability, and other 
-#' matrices are also available.
+#' detailed guide on model specification. A detailed vingette for this package is also available online<doi:10.48550/arXiv.2303.12657>.
 #' @references
 #' Breslow, N. E., Clayton, D. G. (1993). Approximate Inference in Generalized Linear Mixed Models.
 #' Journal of the American Statistical Association<, 88(421), 9–25. <doi:10.1080/01621459.1993.10594284>
@@ -178,10 +180,8 @@ Model <- R6::R6Class("Model",
                        #' @param data A data frame with the data required for the mean function and covariance objects. This argument
                        #' can be ignored if data are provided to the covariance or mean arguments either via `Covariance` and `MeanFunction`
                        #' object, or as a member of the list of arguments to both `covariance` and `mean`.
-                       #' @param family A family object expressing the distribution and link function of the model, see \link[stats]{family}. This
-                       #' argument is optional if the family is provided either via a `MeanFunction` or `MeanFunction`
-                       #' objects, or as members of the list of arguments to `mean`. Current accepts \link[stats]{binomial},
-                       #' \link[stats]{gaussian}, \link[stats]{Gamma}, \link[stats]{poisson}, and \link[glmmrBase]{Beta}.
+                       #' @param family A family object expressing the distribution and link function of the model, see \link[stats]{family}. Currently accepts \link[stats]{binomial},
+                       #' \link[stats]{gaussian}, \link[stats]{Gamma}, \link[stats]{poisson}, \link[glmmrBase]{Beta}, and \link[glmmrBase]{Quantile}.
                        #' @param var_par (Optional) Scale parameter required for some distributions, including Gaussian. Default is NULL.
                        #' @param offset (Optional) A vector of offset values. Optional - could be provided to the argument to mean instead.
                        #' @param trials (Optional) For binomial family models, the number of trials for each observation. If it is not set, then it will
@@ -205,7 +205,17 @@ Model <- R6::R6Class("Model",
                        #'   family = stats::gaussian()
                        #' )
                        #' 
-                       #' #here we will specify a cohort study and provide parameter values
+                       #' # We can also include the outcome data in the model initialisation. 
+                       #' # For example, simulating data and creating a new object:
+                       #' df$y <- mod$sim_data()
+                       #'
+                       #' mod <- Model$new(
+                       #'   formula = y ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
+                       #'   data = df,
+                       #'   family = stats::gaussian()
+                       #' )
+                       #'
+                       #' # Here we will specify a cohort study
                        #' df <- nelder(~ind(20) * t(6))
                        #' df$int <- 0
                        #' df[df$t > 3, 'int'] <- 1
@@ -216,7 +226,7 @@ Model <- R6::R6Class("Model",
                        #'   family = stats::poisson()
                        #' )
                        #'   
-                       #'   # or with parameter values specified
+                       #' # or with parameter values specified
                        #'   
                        #' des <- Model$new(
                        #'   formula = ~ int + (1|gr(ind)),
@@ -227,10 +237,22 @@ Model <- R6::R6Class("Model",
                        #' )
                        #'
                        #' #an example of a spatial grid with two time points
+                       #'
                        #' df <- nelder(~ (x(10)*y(10))*t(2))
                        #' spt_design <- Model$new(formula = ~ 1 + (1|ar0(t)*fexp(x,y)),
                        #'                         data = df,
                        #'                         family = stats::gaussian())
+                       #'
+                       #' # A quantile regression model for the 25th percentile (experimental)
+                       #' df <- nelder(~(cl(10)*t(5)) > ind(10))
+                       #' df$int <- 0
+                       #' df[df$cl > 5, 'int'] <- 1
+                       #'
+                       #' qmod <- Model$new(
+                       #'   formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
+                       #'   data = df,
+                       #'   family = Quantile(link = "identity", scaled = TRUE, q = 0.25)
+                       #' )
                        initialize = function(formula,
                                              covariance,
                                              mean,
@@ -529,6 +551,28 @@ Model <- R6::R6Class("Model",
                              y <- rbeta(self$n(),logitxb*self$var_par,(1-logitxb)*self$var_par)
                            }
                          }
+                         if(f[1]%in%c("quantile","quantile_scaled")){
+                           message("Quantile based methods are currently EXPERIMENTAL")
+                           message("Simulation from quantile family produces random draws from an asymmetric Laplace distribution")
+                           if(f[2]=="logit"){
+                             mu <- exp(mu)/(1+exp(mu))
+                           } else if(f[2]=="log"){
+                             mu <- exp(mu)
+                           } else if(f[2] == "inverse"){
+                             mu <- 1/mu
+                           } else if(f[2] == "probit"){
+                             mu <- pnorm(mu)
+                           }
+                           rand_u <- runif(length(mu))
+                           y <- rep(NA,length(mu))
+                           for(i in 1:length(y)){
+                             if(rand_u[i] <= self$family$q){
+                               y[i] <- (self$var_par/(1-self$family$q))*log(rand_u[i]/self$family$q) + mu[i]
+                             } else {
+                               y[i] <- (self$var_par/self$family$q)*log((1-rand_u[i])/(1-self$family$q)) + mu[i]
+                             }
+                           }
+                         }
                          if(type=="data.frame"|type=="data")y <- cbind(y,self$mean$data)
                          if(type=="all")y <- list(y = y, X = self$mean$X, beta = self$mean$parameters,
                                                   Z = self$covariance$Z, u = re)
@@ -618,8 +662,8 @@ Model <- R6::R6Class("Model",
                            }
                            if(Model__any_nonlinear(private$ptr,private$model_type()) & hessian.corr %in% c("add","return")){
                              A <- Model__hessian_correction(private$ptr,private$model_type())
-                             if(any(eigen(A)$values < 0) & adj.nonpsd){
-                               if(adj.nonpsd)message("Hessian correction for non-linear parameters is not positive semi-definite and will be adjusted. To disable this feature set adj.nonpsd = FALSE")
+                             if(any(eigen(A)$values < 0) & adj.nonspd){
+                               if(adj.nonspd)message("Hessian correction for non-linear parameters is not positive semi-definite and will be adjusted. To disable this feature set adj.nonspd = FALSE")
                                A <- near_semi_pd(A)
                              }
                              if(hessian.corr == "add"){
@@ -871,12 +915,17 @@ Model <- R6::R6Class("Model",
                          if(se == "box" & !(self$family[[1]]=="gaussian"&self$family[[2]]=="identity"))stop("Box only available for linear models")
                          if(!mcmc.pkg %in% c("cmdstan","rstan","hmc"))stop("mcmc.pkg must be one of cmdstan, rstan, or hmc")
                          if(!method %in% c("mcem", "mcnr", "saem", "mcem.adapt", "mcnr.adapt"))stop("method must be either mcem, mcnr, saem, mcem.adapt, mcnr.adapt")
+                         if(self$family[[1]]%in%c("quantile","quantile_scaled") & method == "mcnr")stop("MCNR with quantile currently disabled, please use SAEM or MCEM with MCML")
                          append_u <- FALSE
                          if(mcmc.pkg == "hmc" & method == "saem")stop("saem and hmc options not currently compatible")
                          adaptive <- method %in% c("mcnr.adapt","mcem.adapt")
                          if(!conv.criterion %in% 1:4)stop("Convergence criterion must be 1, 2, or 3")
                          if(alpha < 0.5 | alpha >= 1)stop("alpha must be in [0.5, 1)")
                          if(convergence.prob <= 0 | convergence.prob >= 1)stop("Convergence probability must be in (0, 1)")
+                         if(self$family[[1]]%in%c("quantile","quantile_scaled")){
+                           Model__set_quantile(private$ptr,self$family$q,private$model_type())
+                           message("Quantile regression is EXPERIMENTAL.")
+                         }
                          if(!mcmc.pkg == "hmc"){
                            Model__mcmc_set_lambda(private$ptr,self$mcmc_options$lambda,private$model_type())
                            Model__mcmc_set_max_steps(private$ptr,self$mcmc_options$maxsteps,private$model_type())
@@ -907,7 +956,7 @@ Model <- R6::R6Class("Model",
                          beta <- self$mean$parameters
                          theta <- self$covariance$parameters
                          var_par <- self$var_par
-                         var_par_family <- I(self$family[[1]]%in%c("gaussian","Gamma","beta"))
+                         var_par_family <- I(self$family[[1]]%in%c("gaussian","Gamma","beta","quantile_scaled"))
                          ncovpar <- ifelse(var_par_family,length(theta)+1,length(theta))
                          all_pars <- c(beta,theta)
                          if(var_par_family)all_pars <- c(all_pars,var_par)
@@ -946,6 +995,8 @@ Model <- R6::R6Class("Model",
                          if(self$family[[1]]=="gaussian")data <- append(data,list(sigma = self$var_par/self$weights))
                          if(self$family[[1]]=="binomial")data <- append(data,list(n = self$trials))
                          if(self$family[[1]]%in%c("beta","Gamma"))data <- append(data,list(var_par = self$var_par))
+                         if(self$family[[1]]%in%c("quantile","quantile_scaled"))data <- append(data,list(var_par = self$var_par,
+                                                                                                         q = self$family$q))
                          iter <- 0
                          n_mcmc_sampling <- ifelse(adaptive, 20, self$mcmc_options$samps)
                          beta_diff <- 1
@@ -1136,12 +1187,12 @@ Model <- R6::R6Class("Model",
                          repar_table <- self$covariance$parameter_table()
                          beta_names <- Model__beta_parameter_names(private$ptr,private$model_type())
                          theta_names <- repar_table$term
-                         if(self$family[[1]]%in%c("Gamma","beta")){
+                         if(self$family[[1]]%in%c("Gamma","beta","quantile_scaled")){
                            mf_pars_names <- c(beta_names,theta_names,"sigma")
                            SE <- c(SE,rep(NA,length(theta_new)+1))
                          } else {
                            mf_pars_names <- c(beta_names,theta_names)
-                           if(self$family[[1]]=="gaussian") mf_pars_names <- c(mf_pars_names,"sigma")
+                           if(self$family[[1]]%in%c("gaussian")) mf_pars_names <- c(mf_pars_names,"sigma")
                            SE <- c(SE,SE_theta)
                          }
                          res <- data.frame(par = c(mf_pars_names,paste0("d",1:nrow(u))),
@@ -1304,6 +1355,7 @@ Model <- R6::R6Class("Model",
                          if(!se %in% c("gls","kr","kr2","bw","sat","bwrobust","box"))stop("Option se not recognised")
                          if(self$family[[1]]%in%c("Gamma","beta") & (se == "kr"||se == "kr2"||se == "sat"))stop("KR standard errors are not currently available with gamma or beta families")
                          if(!method%in%c("nloptim","nr"))stop("method should be either nr or nloptim")
+                         if(self$family[[1]]%in%c("quantile","quantile_scaled") & method == "nr")stop("nr with quantile currently disabled, please use nloptim with LA")
                          if(se == "box" & !(self$family[[1]]=="gaussian"&self$family[[2]]=="identity"))stop("Box only available for linear models")
                          if(!is.null(lower.bound)){
                            Model__set_bound(private$ptr,lower.bound,TRUE,TRUE,private$model_type())
@@ -1318,7 +1370,7 @@ Model <- R6::R6Class("Model",
                          if(!is.null(upper.bound.theta)){
                            Model__set_bound(private$ptr,upper.bound.theta,FALSE,FALSE,private$model_type())
                          }
-                         var_par_family <- I(self$family[[1]]%in%c("gaussian","Gamma","beta"))
+                         var_par_family <- I(self$family[[1]]%in%c("gaussian","Gamma","beta","quantile_scaled"))
                          beta <- self$mean$parameters
                          theta <- self$covariance$parameters
                          ncovpar <- ifelse(var_par_family,length(theta)+1,length(theta))
@@ -1404,7 +1456,7 @@ Model <- R6::R6Class("Model",
                          repar_table <- self$covariance$parameter_table()
                          beta_names <- Model__beta_parameter_names(private$ptr,private$model_type())
                          theta_names <- repar_table$term
-                         if(self$family[[1]]%in%c("Gamma","beta")){
+                         if(self$family[[1]]%in%c("Gamma","beta","quantile_scaled")){
                            mf_pars_names <- c(beta_names,theta_names,"sigma")
                            SE <- c(SE,rep(NA,length(theta_new)+1))
                          } else {
@@ -1812,7 +1864,7 @@ Model <- R6::R6Class("Model",
                        },
                        update_ptr = function(force = FALSE){
                          if(is.null(private$ptr) | force | private$session_id != Sys.getpid()){
-                           if(!self$family[[1]]%in%c("poisson","binomial","gaussian","bernoulli","Gamma","beta"))stop("family must be one of Poisson, Binomial, Gaussian, Gamma, Beta")
+                           if(!self$family[[1]]%in%c("poisson","binomial","gaussian","bernoulli","Gamma","beta","quantile","quantile_scaled"))stop("family must be one of Poisson, Binomial, Gaussian, Gamma, Beta, or quantile")
                            if(gsub(" ","",self$mean$formula) != gsub(" ","",self$covariance$formula)){
                              form <- paste0(self$mean$formula,"+",self$covariance$formula)
                            } else {
@@ -1863,6 +1915,7 @@ Model <- R6::R6Class("Model",
                            Model__set_weights(private$ptr,self$weights,type)
                            Model__set_var_par(private$ptr,self$var_par,type)
                            if(self$family[[1]] == "binomial")Model__set_trials(private$ptr,self$trials,type)
+                           if(self$family[[1]] %in% c("quantile","quantile_scaled")) Model__set_quantile(private$ptr,self$family$q,type)
                            Model__update_beta(private$ptr,self$mean$parameters,type)
                            Model__update_theta(private$ptr,self$covariance$parameters,type)
                            Model__update_u(private$ptr,matrix(rnorm(Model__Q(private$ptr,type)),ncol=1),type) # initialise random effects to random
