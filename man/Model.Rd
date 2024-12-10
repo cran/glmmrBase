@@ -23,8 +23,10 @@ where F is a distribution with scale parameter \deqn{\sigma}, h is a link functi
 The class provides access to all of the elements of the model above and associated calculations and functions including model fitting, power analysis,
 and various relevant matrices, including information matrices and related corrections. The object is an R6 class and so can serve as a parent class for extended functionality.
 
-The currently support families (links) are Gaussian (identity, log), Binomial (logit, log, probit, identity), Poisson (log, identity), Gamma (logit, identity, inverse), and Beta (logit). The class also supports mixed quantile
-regression models, although functionality is currently experimental. Quantile models use an asymmetrical Laplace distribution for the likelihood and support all five link functions listed before.
+The currently supported families (links) are Gaussian (identity, log), Binomial (logit, log, probit, identity), Poisson (log, identity), Gamma (logit, identity, inverse), and Beta (logit).
+
+This class provides model fitting functionality with a variety of stochastic maximum likelihood algorithms with and without restricted maximum likelihood corrections. A fast Laplace approximation is also included.
+Small sample corrections are also provided including Kenward-Roger and Satterthwaite corrections.
 
 Many calculations use the covariance matrix of the observations, such as the information matrix, which is used in power calculations and
 other functions. For non-Gaussian models, the class uses the first-order approximation proposed by Breslow and Clayton (1993) based on the
@@ -55,7 +57,7 @@ Using \code{update_parameters()} is the preferred way of updating the parameters
 mean or covariance objects as opposed to direct assignment, e.g. \code{self$covariance$parameters <- c(...)}.
 The function calls check functions to automatically update linked matrices with the new parameters.
 
-\strong{Stochastic maximum likelihood}
+\strong{Monte Carlo maximum likelihood}
 Fits generalised linear mixed models using one of several algorithms: Markov Chain Newton
 Raphson (MCNR), Markov Chain Expectation Maximisation (MCEM), or stochastic approximation expectation
 maximisation (SAEM) with or without Polyak-Ruppert averaging. MCNR and MCEM are described by McCulloch (1997)
@@ -105,6 +107,8 @@ during model fitting use the \code{self$set_trace()} function.
 \dontshow{
 setParallel(FALSE) 
 }
+# For more examples, see the examples for MCML.
+
 #create a data frame describing a cross-sectional parallel cluster
 #randomised trial
 df <- nelder(~(cl(10)*t(5)) > ind(10))
@@ -153,17 +157,6 @@ df <- nelder(~ (x(10)*y(10))*t(2))
 spt_design <- Model$new(formula = ~ 1 + (1|ar0(t)*fexp(x,y)),
                         data = df,
                         family = stats::gaussian())
-
-# A quantile regression model for the 25th percentile (experimental)
-df <- nelder(~(cl(10)*t(5)) > ind(10))
-df$int <- 0
-df[df$cl > 5, 'int'] <- 1
-
-qmod <- Model$new(
-  formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
-  data = df,
-  family = Quantile(link = "identity", scaled = TRUE, q = 0.25)
-)
 
 ## ------------------------------------------------
 ## Method `Model$sim_data`
@@ -226,6 +219,29 @@ des$power() #power of 0.90 for the int parameter
 ## ------------------------------------------------
 
 \dontrun{
+# Simulated trial data example
+data(SimTrial,package = "glmmrBase")
+model <- Model$new(
+  formula = y ~ int + factor(t) - 1 + (1|gr(cl)*ar1(t)),
+  data = SimTrial,
+  family = gaussian()
+)
+glm3 <- model$MCML()
+
+# Salamanders data example
+data(Salamanders,package="glmmrBase")
+model <- Model$new(
+  mating~fpop:mpop-1+(1|gr(mnum))+(1|gr(fnum)),
+  data = Salamanders,
+  family = binomial()
+)
+
+# we will try MCEM with 500 MCMC iterations
+model$mcmc_options$samps <- 500
+# view the grouping structure 
+glm2 <- model$MCML(method = "mcem")
+
+# Example using simulated data
 #create example data with six clusters, five time periods, and five people per cluster-period
 df <- nelder(~(cl(6)*t(5)) > ind(5))
 # parallel trial design intervention indicator
@@ -243,6 +259,38 @@ ysim <- des$sim_data() # simulate some data from the model
 fit1 <- des$MCML(y = ysim) # Default model fitting with SAEM-PR
 # use MCEM instead and stop when parameter values are within 1e-2 on successive iterations
 fit2 <- des$MCML(y = ysim, method="mcem",tol=1e-2,conv.criterion = 1)
+
+# Non-linear model fitting example using the example provided by nlmer in lme4
+data(Orange, package = "lme4")
+
+# the lme4 example:
+startvec <- c(Asym = 200, xmid = 725, scal = 350)
+(nm1 <- lme4::nlmer(circumference ~ SSlogis(age, Asym, xmid, scal) ~ Asym|Tree,
+              Orange, start = startvec))
+
+Orange <- as.data.frame(Orange)
+Orange$Tree <- as.numeric(Orange$Tree)
+
+# Here we can specify the model as a function. 
+
+model <- Model$new(
+  circumference ~ Asym/(1 + exp((xmid - (age))/scal)) - 1 + (Asym|gr(Tree)),
+  data = Orange,
+  family = gaussian(),
+  mean = c(200,725,350),
+  covariance = c(500),
+  var_par = 50
+)
+
+# for this example, we will use MCEM with adaptive MCMC sample sizes
+
+model$mcmc_options$samps <- 1000
+nfit <- model$MCML(method = "mcem.adapt")
+
+summary(nfit)
+summary(nm1)
+
+
 }
 
 ## ------------------------------------------------
@@ -538,6 +586,8 @@ A new Model class object
 \preformatted{\dontshow{
 setParallel(FALSE) 
 }
+# For more examples, see the examples for MCML.
+
 #create a data frame describing a cross-sectional parallel cluster
 #randomised trial
 df <- nelder(~(cl(10)*t(5)) > ind(10))
@@ -586,17 +636,6 @@ df <- nelder(~ (x(10)*y(10))*t(2))
 spt_design <- Model$new(formula = ~ 1 + (1|ar0(t)*fexp(x,y)),
                         data = df,
                         family = stats::gaussian())
-
-# A quantile regression model for the 25th percentile (experimental)
-df <- nelder(~(cl(10)*t(5)) > ind(10))
-df$int <- 0
-df[df$cl > 5, 'int'] <- 1
-
-qmod <- Model$new(
-  formula = ~ factor(t) + int - 1 + (1|gr(cl)) + (1|gr(cl,t)),
-  data = df,
-  family = Quantile(link = "identity", scaled = TRUE, q = 0.25)
-)
 }
 \if{html}{\out{</div>}}
 
@@ -756,12 +795,7 @@ estimator for the variance-covariance matrix of the fixed effect parameters. For
 see \code{small_sample_correction()} and \code{box()}. For models with non-linear functions of fixed effect parameters,
 a correction to the Hessian matrix is required, which is automatically calculated or optionally returned or disabled.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$information_matrix(
-  include.re = FALSE,
-  theta = FALSE,
-  hessian.corr = "add",
-  adj.nonspd = TRUE
-)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$information_matrix(include.re = FALSE, theta = FALSE, oim = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -773,12 +807,7 @@ or the mixed model information matrix for beta only (FALSE).}
 \item{\code{theta}}{Logical. If TRUE the function will return the variance-coviariance matrix for the covariance parameters and ignore the first argument. Otherwise, the fixed effect
 parameter information matrix is returned.}
 
-\item{\code{hessian.corr}}{String. If there are non-linear functions of fixed effect parameters then a correction to the Hessian can be applied ("add"), returned on its
-own ("return"), or ignored ("none")}
-
-\item{\code{adj.nonspd}}{Logical. For models nonlinear in fixed effect parameters, the Hessian of the linear predictor with respect to the
-model parameters is often not positive semi-definite, which can cause a singular matrix and failure to calculate valid standard errors.
-The adjustment matrix will be corrected if it is not positive semi-definite and this option is TRUE.}
+\item{\code{oim}}{Logical. If TRUE, returns the observed information matrix for both beta and theta, disregarding other arguments to the function.}
 }
 \if{html}{\out{</div>}}
 }
@@ -811,13 +840,15 @@ in parameters. Exchangeable covariance structures in this package (i.e. \code{gr
 the variance rather than standard deviation, so the results will be unaffected. Option "sat" returns the "Satterthwaite"
 correction, which only includes corrected degrees of freedom, along with the GLS standard errors.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$small_sample_correction(type)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$small_sample_correction(type, oim = FALSE)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{type}}{Either "KR", "KR2", or "sat", see description.}
+
+\item{\code{oim}}{Logical. If TRUE use the observed information matrix, otherwise use the expected information matrix}
 }
 \if{html}{\out{</div>}}
 }
@@ -962,9 +993,11 @@ Stochastic Maximum Likelihood model fitting
   tol = 0.01,
   max.iter = 50,
   se = "gls",
+  oim = FALSE,
+  reml = TRUE,
   mcmc.pkg = "rstan",
   se.theta = TRUE,
-  algo = ifelse(self$mean$any_nonlinear(), 2, 3),
+  algo = ifelse(self$mean$any_nonlinear(), 2, 1),
   lower.bound = NULL,
   upper.bound = NULL,
   lower.bound.theta = NULL,
@@ -972,7 +1005,8 @@ Stochastic Maximum Likelihood model fitting
   alpha = 0.8,
   convergence.prob = 0.95,
   pr.average = FALSE,
-  conv.criterion = 2
+  conv.criterion = 2,
+  skip.theta = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -998,6 +1032,10 @@ applied to the fixed effect and covariance parameters.}
 degrees of freedom correction as Kenward-Roger, but with GLS standard errors), "box" to use a modified Box correction (does not return confidence intervals),
 "bw" to use GLS standard errors with a between-within correction to the degrees of freedom, "bwrobust" to use robust
 standard errors with between-within correction to the degrees of freedom.}
+
+\item{\code{oim}}{Logical. If TRUE use the observed information matrix, otherwise use the expected information matrix for standard error and related calculations.}
+
+\item{\code{reml}}{Logical. Whether to use a restricted maximum likelihood correction for fitting the covariance parameters}
 
 \item{\code{mcmc.pkg}}{String. Either \code{cmdstan} for cmdstan (requires the package \code{cmdstanr}), \code{rstan} to use rstan sampler, or
 \code{hmc} to use a cruder Hamiltonian Monte Carlo sampler. cmdstan is recommended as it has by far the best number
@@ -1029,6 +1067,9 @@ will result in lower bias but slower convergence, values closer to 1 will result
 2 = The probability of improvement in the overall log-likelihood is less than 1 - \code{convergence.prob}
 3 = The probability of improvement in the log-likelihood for the fixed effects is less than 1 - \code{convergence.prob}
 4 = The probabilities of improvement in the log-likelihood the fixed effects and covariance parameters are both less than 1 - \code{convergence.prob}}
+
+\item{\code{skip.theta}}{Logical. If TRUE then the covariance parameter estimation step is skipped. This option is mainly used for testing, but may be useful
+if covariance parameters are known.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1038,6 +1079,29 @@ A \code{mcml} object
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{\dontrun{
+# Simulated trial data example
+data(SimTrial,package = "glmmrBase")
+model <- Model$new(
+  formula = y ~ int + factor(t) - 1 + (1|gr(cl)*ar1(t)),
+  data = SimTrial,
+  family = gaussian()
+)
+glm3 <- model$MCML()
+
+# Salamanders data example
+data(Salamanders,package="glmmrBase")
+model <- Model$new(
+  mating~fpop:mpop-1+(1|gr(mnum))+(1|gr(fnum)),
+  data = Salamanders,
+  family = binomial()
+)
+
+# we will try MCEM with 500 MCMC iterations
+model$mcmc_options$samps <- 500
+# view the grouping structure 
+glm2 <- model$MCML(method = "mcem")
+
+# Example using simulated data
 #create example data with six clusters, five time periods, and five people per cluster-period
 df <- nelder(~(cl(6)*t(5)) > ind(5))
 # parallel trial design intervention indicator
@@ -1055,6 +1119,38 @@ ysim <- des$sim_data() # simulate some data from the model
 fit1 <- des$MCML(y = ysim) # Default model fitting with SAEM-PR
 # use MCEM instead and stop when parameter values are within 1e-2 on successive iterations
 fit2 <- des$MCML(y = ysim, method="mcem",tol=1e-2,conv.criterion = 1)
+
+# Non-linear model fitting example using the example provided by nlmer in lme4
+data(Orange, package = "lme4")
+
+# the lme4 example:
+startvec <- c(Asym = 200, xmid = 725, scal = 350)
+(nm1 <- lme4::nlmer(circumference ~ SSlogis(age, Asym, xmid, scal) ~ Asym|Tree,
+              Orange, start = startvec))
+
+Orange <- as.data.frame(Orange)
+Orange$Tree <- as.numeric(Orange$Tree)
+
+# Here we can specify the model as a function. 
+
+model <- Model$new(
+  circumference ~ Asym/(1 + exp((xmid - (age))/scal)) - 1 + (Asym|gr(Tree)),
+  data = Orange,
+  family = gaussian(),
+  mean = c(200,725,350),
+  covariance = c(500),
+  var_par = 50
+)
+
+# for this example, we will use MCEM with adaptive MCMC sample sizes
+
+model$mcmc_options$samps <- 1000
+nfit <- model$MCML(method = "mcem.adapt")
+
+summary(nfit)
+summary(nm1)
+
+
 }
 }
 \if{html}{\out{</div>}}
@@ -1073,6 +1169,8 @@ Maximum Likelihood model fitting with Laplace Approximation
   start,
   method = "nr",
   se = "gls",
+  oim = FALSE,
+  reml = TRUE,
   max.iter = 40,
   tol = 1e-04,
   se.theta = TRUE,
@@ -1101,6 +1199,10 @@ degrees of freedom correction as Kenward-Roger, but with GLS standard errors)"bo
 "bw" to use GLS standard errors with a between-within correction to the degrees of freedom, "bwrobust" to use robust
 standard errors with between-within correction to the degrees of freedom.
 Note that Kenward-Roger assumes REML estimates, which are not currently provided by this function.}
+
+\item{\code{oim}}{Logical. If TRUE use the observed information matrix, otherwise use the expected information matrix for standard error and related calculations.}
+
+\item{\code{reml}}{Logical. Whether to use a restricted maximum likelihood correction for fitting the covariance parameters}
 
 \item{\code{max.iter}}{Maximum number of algorithm iterations, default 20.}
 
@@ -1341,7 +1443,8 @@ of the stored parameters and data variables see the member function \code{names(
   average = c(),
   xvals = c(1, 0),
   atvals = c(),
-  revals = c()
+  revals = c(),
+  oim = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -1370,6 +1473,8 @@ or \code{robust} to use a robust sandwich estimator.}
 \item{\code{atvals}}{Optional. A vector specifying the values of fixed effects specified in \code{at} (in the same order).}
 
 \item{\code{revals}}{Optional. If \code{re="at"} then this argument provides a vector of values for the random effects.}
+
+\item{\code{oim}}{Logical. If TRUE use the observed information matrix, otherwise use the expected information matrix for standard error and related calculations.}
 }
 \if{html}{\out{</div>}}
 }

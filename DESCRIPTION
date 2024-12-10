@@ -1,8 +1,8 @@
 Package: glmmrBase
 Type: Package
 Title: Generalised Linear Mixed Models in R
-Version: 0.10.5
-Date: 2024-09-04
+Version: 0.11.1
+Date: 2024-12-05
 Authors@R: c(person("Sam", "Watson", email = "S.I.Watson@bham.ac.uk",
                   role = c("aut", "cre")))
 Description: Specification, analysis, simulation, and fitting of generalised linear mixed models. 
@@ -13,10 +13,10 @@ Description: Specification, analysis, simulation, and fitting of generalised lin
 License: GPL (>= 2)
 Imports: methods, Rcpp (>= 1.0.11), R6, rstan (>= 2.32.1), rstantools
         (>= 2.3.1.1)
-LinkingTo: Rcpp (>= 1.0.11), RcppEigen, SparseChol (>= 0.3.1), BH,
+LinkingTo: Rcpp (>= 1.0.11), RcppEigen, SparseChol (>= 0.3.2), BH,
         RcppParallel (>= 5.0.1), rstan (>= 2.32.1), StanHeaders (>=
         2.32.0)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 NeedsCompilation: yes
 Author: Sam Watson [aut, cre]
 URL: https://github.com/samuel-watson/glmmrBase
@@ -27,7 +27,7 @@ SystemRequirements: GNU make
 Encoding: UTF-8
 Config/testthat/edition: 3
 LazyData: true
-Packaged: 2024-09-07 15:14:16 UTC; samue
+Packaged: 2024-12-09 13:32:52 UTC; WatsonSI
 Maintainer: Sam Watson <S.I.Watson@bham.ac.uk>
 Repository: CRAN
-Date/Publication: 2024-09-07 22:20:02 UTC
+Date/Publication: 2024-12-10 00:40:02 UTC

@@ -35,6 +35,16 @@ void Model__set_lbfgs_control(SEXP xp, double g_epsilon = 1e-8, int past = 3, do
 }
 
 // [[Rcpp::export]]
+void Model__use_reml(SEXP xp, bool reml = true, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {}, 
+    [&reml](auto ptr){ptr->optim.use_reml(reml);}
+  };
+  std::visit(functor,model.ptr);
+}
+
+// [[Rcpp::export]]
 void Model__set_bound(SEXP xp, SEXP bound_, bool beta = true, bool lower = true, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   std::vector<double> bound = as<std::vector<double> >(bound_);
@@ -131,6 +141,39 @@ SEXP Model__log_likelihood(SEXP xp, int type = 0){
   };
   auto S = std::visit(functor,model.ptr);
   return wrap(std::get<double>(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__n_cov_pars(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->model.covariance.npar());}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<int>(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__Z(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->model.covariance.Z());}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<Eigen::MatrixXd>(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__Z_needs_updating(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->model.covariance.z_requires_update);}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<bool>(S));
 }
 
 // [[Rcpp::export]]
@@ -474,7 +517,18 @@ SEXP Model__obs_information_matrix(SEXP xp, int type = 0){
   glmmrType model(xp,static_cast<Type>(type));
   auto functor = overloaded {
     [](int) {  return returnType(0);}, 
-    [](auto ptr){return returnType(ptr->matrix.observed_information_matrix());}
+    [](auto ptr){return returnType(ptr->matrix.template observed_information_matrix<glmmr::IM::EIM>());}
+  };
+  auto S = std::visit(functor,model.ptr);
+  return wrap(std::get<Eigen::MatrixXd>(S));
+}
+
+// [[Rcpp::export]]
+SEXP Model__observed_information_matrix(SEXP xp, int type = 0){
+  glmmrType model(xp,static_cast<Type>(type));
+  auto functor = overloaded {
+    [](int) {  return returnType(0);}, 
+    [](auto ptr){return returnType(ptr->matrix.template observed_information_matrix<glmmr::IM::OIM>());}
   };
   auto S = std::visit(functor,model.ptr);
   return wrap(std::get<Eigen::MatrixXd>(S));

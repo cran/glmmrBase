@@ -137,8 +137,8 @@ Model__new <- function(formula_, data_, colnames_, family_, link_) {
     .Call(`_glmmrBase_Model__new`, formula_, data_, colnames_, family_, link_)
 }
 
-Model_nngp__new <- function(formula_, data_, colnames_, family_, link_) {
-    .Call(`_glmmrBase_Model_nngp__new`, formula_, data_, colnames_, family_, link_)
+Model_nngp__new <- function(formula_, data_, colnames_, family_, link_, nn) {
+    .Call(`_glmmrBase_Model_nngp__new`, formula_, data_, colnames_, family_, link_, nn)
 }
 
 Model_nngp__new_w_pars <- function(formula_, data_, colnames_, family_, link_, beta_, theta_, nn) {
@@ -213,6 +213,10 @@ Model__set_lbfgs_control <- function(xp, g_epsilon = 1e-8, past = 3L, delta = 1e
     invisible(.Call(`_glmmrBase_Model__set_lbfgs_control`, xp, g_epsilon, past, delta, max_linesearch, type))
 }
 
+Model__use_reml <- function(xp, reml = TRUE, type = 0L) {
+    invisible(.Call(`_glmmrBase_Model__use_reml`, xp, reml, type))
+}
+
 Model__set_bound <- function(xp, bound_, beta = TRUE, lower = TRUE, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__set_bound`, xp, bound_, beta, lower, type))
 }
@@ -239,6 +243,18 @@ Model__linear_predictor <- function(xp, type = 0L) {
 
 Model__log_likelihood <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__log_likelihood`, xp, type)
+}
+
+Model__n_cov_pars <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__n_cov_pars`, xp, type)
+}
+
+Model__Z <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__Z`, xp, type)
+}
+
+Model__Z_needs_updating <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__Z_needs_updating`, xp, type)
 }
 
 Model__cov_set_nn <- function(xp, nn) {
@@ -331,6 +347,10 @@ Model__information_matrix_crude <- function(xp, type = 2L) {
 
 Model__obs_information_matrix <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__obs_information_matrix`, xp, type)
+}
+
+Model__observed_information_matrix <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__observed_information_matrix`, xp, type)
 }
 
 Model__u <- function(xp, scaled_, type = 0L) {
@@ -429,8 +449,8 @@ Model__u_diagnostic <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__u_diagnostic`, xp, type)
 }
 
-Model__marginal <- function(xp, x, margin = 0L, re = 3L, se = 0L, at = NULL, atmeans = NULL, average = NULL, xvals_first = 1, xvals_second = 0, atvals = NULL, revals = NULL, type = 0L) {
-    .Call(`_glmmrBase_Model__marginal`, xp, x, margin, re, se, at, atmeans, average, xvals_first, xvals_second, atvals, revals, type)
+Model__marginal <- function(xp, x, margin = 0L, re = 3L, se = 0L, oim = 0L, at = NULL, atmeans = NULL, average = NULL, xvals_first = 1, xvals_second = 0, atvals = NULL, revals = NULL, type = 0L) {
+    .Call(`_glmmrBase_Model__marginal`, xp, x, margin, re, se, oim, at, atmeans, average, xvals_first, xvals_second, atvals, revals, type)
 }
 
 Model__mcmc_set_lambda <- function(xp, lambda_, type = 0L) {
@@ -485,10 +505,6 @@ Model__theta_parameter_names <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__theta_parameter_names`, xp, type)
 }
 
-Model__hessian_correction <- function(xp, type = 0L) {
-    .Call(`_glmmrBase_Model__hessian_correction`, xp, type)
-}
-
 Model__any_nonlinear <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__any_nonlinear`, xp, type)
 }
@@ -505,8 +521,8 @@ Model__kenward_roger <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__kenward_roger`, xp, type)
 }
 
-Model__small_sample_correction <- function(xp, ss_type = 0L, type = 0L) {
-    .Call(`_glmmrBase_Model__small_sample_correction`, xp, ss_type, type)
+Model__small_sample_correction <- function(xp, ss_type = 0L, oim = FALSE, type = 0L) {
+    .Call(`_glmmrBase_Model__small_sample_correction`, xp, ss_type, oim, type)
 }
 
 Model__box <- function(xp, type = 0L) {

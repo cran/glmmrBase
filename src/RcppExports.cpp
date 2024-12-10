@@ -432,8 +432,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Model_nngp__new
-SEXP Model_nngp__new(SEXP formula_, SEXP data_, SEXP colnames_, SEXP family_, SEXP link_);
-RcppExport SEXP _glmmrBase_Model_nngp__new(SEXP formula_SEXP, SEXP data_SEXP, SEXP colnames_SEXP, SEXP family_SEXP, SEXP link_SEXP) {
+SEXP Model_nngp__new(SEXP formula_, SEXP data_, SEXP colnames_, SEXP family_, SEXP link_, int nn);
+RcppExport SEXP _glmmrBase_Model_nngp__new(SEXP formula_SEXP, SEXP data_SEXP, SEXP colnames_SEXP, SEXP family_SEXP, SEXP link_SEXP, SEXP nnSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -442,7 +442,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< SEXP >::type colnames_(colnames_SEXP);
     Rcpp::traits::input_parameter< SEXP >::type family_(family_SEXP);
     Rcpp::traits::input_parameter< SEXP >::type link_(link_SEXP);
-    rcpp_result_gen = Rcpp::wrap(Model_nngp__new(formula_, data_, colnames_, family_, link_));
+    Rcpp::traits::input_parameter< int >::type nn(nnSEXP);
+    rcpp_result_gen = Rcpp::wrap(Model_nngp__new(formula_, data_, colnames_, family_, link_, nn));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -686,6 +687,18 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// Model__use_reml
+void Model__use_reml(SEXP xp, bool reml, int type);
+RcppExport SEXP _glmmrBase_Model__use_reml(SEXP xpSEXP, SEXP remlSEXP, SEXP typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
+    Rcpp::traits::input_parameter< bool >::type reml(remlSEXP);
+    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
+    Model__use_reml(xp, reml, type);
+    return R_NilValue;
+END_RCPP
+}
 // Model__set_bound
 void Model__set_bound(SEXP xp, SEXP bound_, bool beta, bool lower, int type);
 RcppExport SEXP _glmmrBase_Model__set_bound(SEXP xpSEXP, SEXP bound_SEXP, SEXP betaSEXP, SEXP lowerSEXP, SEXP typeSEXP) {
@@ -773,6 +786,42 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
     Rcpp::traits::input_parameter< int >::type type(typeSEXP);
     rcpp_result_gen = Rcpp::wrap(Model__log_likelihood(xp, type));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Model__n_cov_pars
+SEXP Model__n_cov_pars(SEXP xp, int type);
+RcppExport SEXP _glmmrBase_Model__n_cov_pars(SEXP xpSEXP, SEXP typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
+    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
+    rcpp_result_gen = Rcpp::wrap(Model__n_cov_pars(xp, type));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Model__Z
+SEXP Model__Z(SEXP xp, int type);
+RcppExport SEXP _glmmrBase_Model__Z(SEXP xpSEXP, SEXP typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
+    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
+    rcpp_result_gen = Rcpp::wrap(Model__Z(xp, type));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Model__Z_needs_updating
+SEXP Model__Z_needs_updating(SEXP xp, int type);
+RcppExport SEXP _glmmrBase_Model__Z_needs_updating(SEXP xpSEXP, SEXP typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
+    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
+    rcpp_result_gen = Rcpp::wrap(Model__Z_needs_updating(xp, type));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1045,6 +1094,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
     Rcpp::traits::input_parameter< int >::type type(typeSEXP);
     rcpp_result_gen = Rcpp::wrap(Model__obs_information_matrix(xp, type));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Model__observed_information_matrix
+SEXP Model__observed_information_matrix(SEXP xp, int type);
+RcppExport SEXP _glmmrBase_Model__observed_information_matrix(SEXP xpSEXP, SEXP typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
+    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
+    rcpp_result_gen = Rcpp::wrap(Model__observed_information_matrix(xp, type));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1340,8 +1401,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Model__marginal
-SEXP Model__marginal(SEXP xp, std::string x, int margin, int re, int se, Nullable<std::vector<std::string> > at, Nullable<std::vector<std::string> > atmeans, Nullable<std::vector<std::string> > average, double xvals_first, double xvals_second, Nullable<std::vector<double> > atvals, Nullable<std::vector<double> > revals, int type);
-RcppExport SEXP _glmmrBase_Model__marginal(SEXP xpSEXP, SEXP xSEXP, SEXP marginSEXP, SEXP reSEXP, SEXP seSEXP, SEXP atSEXP, SEXP atmeansSEXP, SEXP averageSEXP, SEXP xvals_firstSEXP, SEXP xvals_secondSEXP, SEXP atvalsSEXP, SEXP revalsSEXP, SEXP typeSEXP) {
+SEXP Model__marginal(SEXP xp, std::string x, int margin, int re, int se, int oim, Nullable<std::vector<std::string> > at, Nullable<std::vector<std::string> > atmeans, Nullable<std::vector<std::string> > average, double xvals_first, double xvals_second, Nullable<std::vector<double> > atvals, Nullable<std::vector<double> > revals, int type);
+RcppExport SEXP _glmmrBase_Model__marginal(SEXP xpSEXP, SEXP xSEXP, SEXP marginSEXP, SEXP reSEXP, SEXP seSEXP, SEXP oimSEXP, SEXP atSEXP, SEXP atmeansSEXP, SEXP averageSEXP, SEXP xvals_firstSEXP, SEXP xvals_secondSEXP, SEXP atvalsSEXP, SEXP revalsSEXP, SEXP typeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1350,6 +1411,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type margin(marginSEXP);
     Rcpp::traits::input_parameter< int >::type re(reSEXP);
     Rcpp::traits::input_parameter< int >::type se(seSEXP);
+    Rcpp::traits::input_parameter< int >::type oim(oimSEXP);
     Rcpp::traits::input_parameter< Nullable<std::vector<std::string> > >::type at(atSEXP);
     Rcpp::traits::input_parameter< Nullable<std::vector<std::string> > >::type atmeans(atmeansSEXP);
     Rcpp::traits::input_parameter< Nullable<std::vector<std::string> > >::type average(averageSEXP);
@@ -1358,7 +1420,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Nullable<std::vector<double> > >::type atvals(atvalsSEXP);
     Rcpp::traits::input_parameter< Nullable<std::vector<double> > >::type revals(revalsSEXP);
     Rcpp::traits::input_parameter< int >::type type(typeSEXP);
-    rcpp_result_gen = Rcpp::wrap(Model__marginal(xp, x, margin, re, se, at, atmeans, average, xvals_first, xvals_second, atvals, revals, type));
+    rcpp_result_gen = Rcpp::wrap(Model__marginal(xp, x, margin, re, se, oim, at, atmeans, average, xvals_first, xvals_second, atvals, revals, type));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1522,18 +1584,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// Model__hessian_correction
-SEXP Model__hessian_correction(SEXP xp, int type);
-RcppExport SEXP _glmmrBase_Model__hessian_correction(SEXP xpSEXP, SEXP typeSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
-    Rcpp::traits::input_parameter< int >::type type(typeSEXP);
-    rcpp_result_gen = Rcpp::wrap(Model__hessian_correction(xp, type));
-    return rcpp_result_gen;
-END_RCPP
-}
 // Model__any_nonlinear
 SEXP Model__any_nonlinear(SEXP xp, int type);
 RcppExport SEXP _glmmrBase_Model__any_nonlinear(SEXP xpSEXP, SEXP typeSEXP) {
@@ -1583,15 +1633,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // Model__small_sample_correction
-SEXP Model__small_sample_correction(SEXP xp, int ss_type, int type);
-RcppExport SEXP _glmmrBase_Model__small_sample_correction(SEXP xpSEXP, SEXP ss_typeSEXP, SEXP typeSEXP) {
+SEXP Model__small_sample_correction(SEXP xp, int ss_type, bool oim, int type);
+RcppExport SEXP _glmmrBase_Model__small_sample_correction(SEXP xpSEXP, SEXP ss_typeSEXP, SEXP oimSEXP, SEXP typeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type xp(xpSEXP);
     Rcpp::traits::input_parameter< int >::type ss_type(ss_typeSEXP);
+    Rcpp::traits::input_parameter< bool >::type oim(oimSEXP);
     Rcpp::traits::input_parameter< int >::type type(typeSEXP);
-    rcpp_result_gen = Rcpp::wrap(Model__small_sample_correction(xp, ss_type, type));
+    rcpp_result_gen = Rcpp::wrap(Model__small_sample_correction(xp, ss_type, oim, type));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1782,7 +1833,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_ModelBits__update_theta", (DL_FUNC) &_glmmrBase_ModelBits__update_theta, 2},
     {"_glmmrBase_Model__new_w_pars", (DL_FUNC) &_glmmrBase_Model__new_w_pars, 7},
     {"_glmmrBase_Model__new", (DL_FUNC) &_glmmrBase_Model__new, 5},
-    {"_glmmrBase_Model_nngp__new", (DL_FUNC) &_glmmrBase_Model_nngp__new, 5},
+    {"_glmmrBase_Model_nngp__new", (DL_FUNC) &_glmmrBase_Model_nngp__new, 6},
     {"_glmmrBase_Model_nngp__new_w_pars", (DL_FUNC) &_glmmrBase_Model_nngp__new_w_pars, 8},
     {"_glmmrBase_Model_hsgp__new", (DL_FUNC) &_glmmrBase_Model_hsgp__new, 5},
     {"_glmmrBase_Model_hsgp__new_w_pars", (DL_FUNC) &_glmmrBase_Model_hsgp__new_w_pars, 7},
@@ -1801,6 +1852,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__get_W", (DL_FUNC) &_glmmrBase_Model__get_W, 2},
     {"_glmmrBase_Model__set_direct_control", (DL_FUNC) &_glmmrBase_Model__set_direct_control, 10},
     {"_glmmrBase_Model__set_lbfgs_control", (DL_FUNC) &_glmmrBase_Model__set_lbfgs_control, 6},
+    {"_glmmrBase_Model__use_reml", (DL_FUNC) &_glmmrBase_Model__use_reml, 3},
     {"_glmmrBase_Model__set_bound", (DL_FUNC) &_glmmrBase_Model__set_bound, 5},
     {"_glmmrBase_Model__print_instructions", (DL_FUNC) &_glmmrBase_Model__print_instructions, 2},
     {"_glmmrBase_Model__log_prob", (DL_FUNC) &_glmmrBase_Model__log_prob, 3},
@@ -1808,6 +1860,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__log_gradient", (DL_FUNC) &_glmmrBase_Model__log_gradient, 4},
     {"_glmmrBase_Model__linear_predictor", (DL_FUNC) &_glmmrBase_Model__linear_predictor, 2},
     {"_glmmrBase_Model__log_likelihood", (DL_FUNC) &_glmmrBase_Model__log_likelihood, 2},
+    {"_glmmrBase_Model__n_cov_pars", (DL_FUNC) &_glmmrBase_Model__n_cov_pars, 2},
+    {"_glmmrBase_Model__Z", (DL_FUNC) &_glmmrBase_Model__Z, 2},
+    {"_glmmrBase_Model__Z_needs_updating", (DL_FUNC) &_glmmrBase_Model__Z_needs_updating, 2},
     {"_glmmrBase_Model__cov_set_nn", (DL_FUNC) &_glmmrBase_Model__cov_set_nn, 2},
     {"_glmmrBase_Model__test_lbfgs", (DL_FUNC) &_glmmrBase_Model__test_lbfgs, 2},
     {"_glmmrBase_Model__test_lbfgs_theta", (DL_FUNC) &_glmmrBase_Model__test_lbfgs_theta, 2},
@@ -1831,6 +1886,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__parameter_fn_index", (DL_FUNC) &_glmmrBase_Model__parameter_fn_index, 2},
     {"_glmmrBase_Model__information_matrix_crude", (DL_FUNC) &_glmmrBase_Model__information_matrix_crude, 2},
     {"_glmmrBase_Model__obs_information_matrix", (DL_FUNC) &_glmmrBase_Model__obs_information_matrix, 2},
+    {"_glmmrBase_Model__observed_information_matrix", (DL_FUNC) &_glmmrBase_Model__observed_information_matrix, 2},
     {"_glmmrBase_Model__u", (DL_FUNC) &_glmmrBase_Model__u, 3},
     {"_glmmrBase_Model__Zu", (DL_FUNC) &_glmmrBase_Model__Zu, 2},
     {"_glmmrBase_Model__X", (DL_FUNC) &_glmmrBase_Model__X, 2},
@@ -1855,7 +1911,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__residuals", (DL_FUNC) &_glmmrBase_Model__residuals, 4},
     {"_glmmrBase_Model__get_log_likelihood_values", (DL_FUNC) &_glmmrBase_Model__get_log_likelihood_values, 2},
     {"_glmmrBase_Model__u_diagnostic", (DL_FUNC) &_glmmrBase_Model__u_diagnostic, 2},
-    {"_glmmrBase_Model__marginal", (DL_FUNC) &_glmmrBase_Model__marginal, 13},
+    {"_glmmrBase_Model__marginal", (DL_FUNC) &_glmmrBase_Model__marginal, 14},
     {"_glmmrBase_Model__mcmc_set_lambda", (DL_FUNC) &_glmmrBase_Model__mcmc_set_lambda, 3},
     {"_glmmrBase_Model__reset_fn_counter", (DL_FUNC) &_glmmrBase_Model__reset_fn_counter, 2},
     {"_glmmrBase_Model__get_fn_counter", (DL_FUNC) &_glmmrBase_Model__get_fn_counter, 2},
@@ -1869,12 +1925,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"_glmmrBase_Model__make_dense", (DL_FUNC) &_glmmrBase_Model__make_dense, 2},
     {"_glmmrBase_Model__beta_parameter_names", (DL_FUNC) &_glmmrBase_Model__beta_parameter_names, 2},
     {"_glmmrBase_Model__theta_parameter_names", (DL_FUNC) &_glmmrBase_Model__theta_parameter_names, 2},
-    {"_glmmrBase_Model__hessian_correction", (DL_FUNC) &_glmmrBase_Model__hessian_correction, 2},
     {"_glmmrBase_Model__any_nonlinear", (DL_FUNC) &_glmmrBase_Model__any_nonlinear, 2},
     {"_glmmrBase_Model__sandwich", (DL_FUNC) &_glmmrBase_Model__sandwich, 2},
     {"_glmmrBase_Model__infomat_theta", (DL_FUNC) &_glmmrBase_Model__infomat_theta, 2},
     {"_glmmrBase_Model__kenward_roger", (DL_FUNC) &_glmmrBase_Model__kenward_roger, 2},
-    {"_glmmrBase_Model__small_sample_correction", (DL_FUNC) &_glmmrBase_Model__small_sample_correction, 3},
+    {"_glmmrBase_Model__small_sample_correction", (DL_FUNC) &_glmmrBase_Model__small_sample_correction, 4},
     {"_glmmrBase_Model__box", (DL_FUNC) &_glmmrBase_Model__box, 2},
     {"_glmmrBase_Model__cov_deriv", (DL_FUNC) &_glmmrBase_Model__cov_deriv, 2},
     {"_glmmrBase_Model__predict", (DL_FUNC) &_glmmrBase_Model__predict, 5},
