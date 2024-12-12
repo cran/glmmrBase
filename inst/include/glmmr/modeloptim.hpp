@@ -377,7 +377,7 @@ inline void glmmr::ModelOptim<modeltype>::laplace_ml_theta()
   
   if(re.scaled_u_.cols() != re.u_.cols())re.scaled_u_.conservativeResize(NoChange,re.u_.cols());
   re.scaled_u_ = model.covariance.Lu(re.u_);
-
+  if(control.reml) generate_czz();
   if constexpr (std::is_same_v<algo,LBFGS>){
     VectorXd start_vec = Map<VectorXd>(start.data(),start.size());
     optim<double(const VectorXd&, VectorXd&),algo> op(start_vec);
@@ -574,6 +574,8 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood_laplace_theta(const d
   if(control.reml){
     // REML correction to the log-likelihood
     MatrixXd D = model.covariance.D().llt().solve(MatrixXd::Identity(Q(),Q()));
+    // if(D.rows()!=Q() || D.cols()!=Q()) throw std::runtime_error("D wrong size");
+    // if(CZZ.rows()!=Q() || CZZ.cols()!=Q()) throw std::runtime_error("CZZ wrong size");
     MatrixXd CZZD = CZZ + D;
     CZZD = CZZD.llt().solve(MatrixXd::Identity(Q(),Q()));
     double trCZZ = 0;
@@ -582,7 +584,7 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood_laplace_theta(const d
         trCZZ += D(i,j)*CZZD(j,i);
       }
     }
-    ll -= 0.5*trCZZ;
+    ll += -0.5*trCZZ;
   }
   
   return -1.0*ll;
@@ -1416,7 +1418,7 @@ inline ArrayXd glmmr::ModelOptim<modeltype>::optimum_weights(double N,
     }
     
     M.setZero();
-    for(int i = 0 ; i < SB.size(); i++){
+    for(int i = 0 ; i < static_cast<int>(SB.size()); i++){
       Sigmas[i] = ZDZ[i];
       for(int j = 0; j < Sigmas[i].rows(); j++){
         // sigma_sq
@@ -1451,7 +1453,7 @@ inline ArrayXd glmmr::ModelOptim<modeltype>::optimum_weights(double N,
       }
       M.conservativeResize(M.rows()-countZero,M.cols()-countZero);
       M.setZero();
-      for(int k = 0; k < SB.size(); k++){
+      for(int k = 0; k < static_cast<int>(SB.size()); k++){
         M += Xs[k].transpose() * Sigmas[k] * Xs[k];
       }
     }
