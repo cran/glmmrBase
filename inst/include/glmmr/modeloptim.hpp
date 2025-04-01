@@ -70,6 +70,7 @@ public:
   virtual double  full_log_likelihood();
   virtual void    nr_beta();
   virtual void    laplace_nr_beta_u();
+  void            laplace_beta_u();
   virtual void    update_var_par(const double& v);
   virtual void    update_var_par(const ArrayXd& v);
   template<class algo, typename = std::enable_if_t<std::is_base_of<optim_algo, algo>::value> >
@@ -220,6 +221,7 @@ inline void glmmr::ModelOptim<modeltype>::ml_beta(){
   int eval_size = control.saem ? re.mcmc_block_size : ll_current.rows();
   current_ll_values.first = ll_current.col(0).tail(eval_size).mean();
   current_ll_var.first = (ll_current.col(0).tail(eval_size) - ll_current.col(0).tail(eval_size).mean()).square().sum() / (eval_size - 1);
+  
 }
 
 template<typename modeltype>
@@ -377,7 +379,7 @@ inline void glmmr::ModelOptim<modeltype>::laplace_ml_theta()
   
   if(re.scaled_u_.cols() != re.u_.cols())re.scaled_u_.conservativeResize(NoChange,re.u_.cols());
   re.scaled_u_ = model.covariance.Lu(re.u_);
-  if(control.reml) generate_czz();
+  generate_czz();
   if constexpr (std::is_same_v<algo,LBFGS>){
     VectorXd start_vec = Map<VectorXd>(start.data(),start.size());
     optim<double(const VectorXd&, VectorXd&),algo> op(start_vec);
@@ -399,9 +401,7 @@ inline void glmmr::ModelOptim<modeltype>::laplace_ml_theta()
       set_bobyqa_control(op);
     } else if constexpr (std::is_same_v<algo,NEWUOA>) {
       set_newuoa_control(op);
-    } else if constexpr (std::is_same_v<algo,LBFGS>) {
-      throw std::runtime_error("L-BFGS not available for Laplace theta optimisation");
-    }
+    } 
     op.set_bounds(lower,upper);
     if constexpr (std::is_same_v<modeltype,bits>)
     {
@@ -413,7 +413,7 @@ inline void glmmr::ModelOptim<modeltype>::laplace_ml_theta()
     }
     op.minimise();
   }
-
+  calculate_var_par();
  
 }
 
@@ -559,34 +559,29 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood_laplace_beta_u(const 
 
 template<typename modeltype>
 inline double glmmr::ModelOptim<modeltype>::log_likelihood_laplace_theta(const dblvec &par)
-{
-  // update_theta(par);
-  // matrix.W.update();
-  // double logl = re.u_.col(0).transpose() * re.u_.col(0);
-  // double ll = log_likelihood();
-  // MatrixXd LZWZL = model.covariance.LZWZL(matrix.W.W());
-  // double LZWdet = glmmr::maths::logdet(LZWZL);
-  // return -1*(ll - 0.5*logl - 0.5*LZWdet);
-  
+{  
   model.covariance.update_parameters(par);
   double ll =  model.covariance.log_likelihood(re.scaled_u_.col(0));
-  
-  if(control.reml){
-    // REML correction to the log-likelihood
-    MatrixXd D = model.covariance.D().llt().solve(MatrixXd::Identity(Q(),Q()));
-    // if(D.rows()!=Q() || D.cols()!=Q()) throw std::runtime_error("D wrong size");
-    // if(CZZ.rows()!=Q() || CZZ.cols()!=Q()) throw std::runtime_error("CZZ wrong size");
-    MatrixXd CZZD = CZZ + D;
-    CZZD = CZZD.llt().solve(MatrixXd::Identity(Q(),Q()));
-    double trCZZ = 0;
-    for(int i = 0; i < Q(); i++){
-      for(int j = 0; j < Q(); j++){
-        trCZZ += D(i,j)*CZZD(j,i);
-      }
-    }
-    ll += -0.5*trCZZ;
+
+  // REML correction to the log-likelihood
+  MatrixXd D = model.covariance.D();
+  if (model.covariance.all_group_re()) {
+      for (int i = 0; i < D.rows(); i++) D(i, i) = 1 / D(i, i);
   }
-  
+  else {
+      D = D.llt().solve(MatrixXd::Identity(Q(), Q()));
+  }
+  // D = D.llt().solve(MatrixXd::Identity(Q(), Q()));
+  double trCZZ = 0;
+  for (int i = 0; i < Q(); i++) {
+      for (int j = 0; j < Q(); j++) {
+          trCZZ += D(i, j) * CZZ(j, i);
+      }
+  }
+  ll += -0.5 * trCZZ;
+  //std::cout << "\nOptim | vals: ";
+  //for (const auto& th : par) std::cout << " " << th;
+  //std::cout << " | ll: " << ll;
   return -1.0*ll;
   
 }
@@ -678,21 +673,17 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood_theta(const dblvec& t
   {
     ll_current(i,1) = model.covariance.log_likelihood(re.scaled_u_.col(i));
   }
-  
   if(control.reml){
     // REML correction to the log-likelihood
     MatrixXd D = model.covariance.D().llt().solve(MatrixXd::Identity(Q(),Q()));
-    MatrixXd CZZD = CZZ + D;
-    CZZD = CZZD.llt().solve(MatrixXd::Identity(Q(),Q()));
     double trCZZ = 0;
     for(int i = 0; i < Q(); i++){
       for(int j = 0; j < Q(); j++){
-        trCZZ += D(i,j)*CZZD(j,i);
+        trCZZ += D(i,j)*CZZ(j,i);
       }
     }
     ll_current.col(1).array() -= 0.5*trCZZ;
   }
-  
   double ll = 0;
   if(control.saem)
   {
@@ -749,13 +740,11 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood_theta_with_gradient(c
     model.covariance.derivatives(derivs,1);
     int npars = derivs.size()-1;
     MatrixXd D = model.covariance.D().llt().solve(MatrixXd::Identity(Q(),Q()));
-    MatrixXd CZZD = CZZ + D;
-    CZZD = CZZD.llt().solve(MatrixXd::Identity(Q(),Q()));
     double trCZZD, trCZZ;
     trCZZ = 0;
     for(int i = 0; i < Q(); i++){
       for(int j = 0; j < Q(); j++){
-        trCZZ += D(i,j)*CZZD(j,i);
+        trCZZ += D(i,j)*CZZ(j,i);
       }
     }
     ll -= 0.5*trCZZ;
@@ -764,13 +753,13 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood_theta_with_gradient(c
       MatrixXd Dderiv = D * derivs[k+1] * D;
       for(int i = 0; i < Q(); i++){
         for(int j = 0; j < Q(); j++){
-          trCZZD += D(i,j)*CZZD(j,i);
+          trCZZD += Dderiv(i,j)*CZZ(j,i);
         }
       }
-      g(k) += -0.5*trCZZ;
+      g(k) += -0.5*trCZZD;
     }
+    
   }
-  
   return -1*ll;
 }
 
@@ -1000,7 +989,7 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood(bool beta) {
   
   if(model.weighted){
     if(model.family.family==Fam::gaussian){
-#pragma omp parallel for
+#pragma omp parallel for if(re.zu_.cols() > 50)
       for(int j= 0; j< re.zu_.cols() ; j++){
         for(int i = 0; i<model.n(); i++){
           ll_current(j,llcol ) += glmmr::maths::log_likelihood(model.data.y(i),xb(i) + re.zu_(i,j),
@@ -1009,7 +998,7 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood(bool beta) {
         }
       }
     } else {
-#pragma omp parallel for
+#pragma omp parallel for if(re.zu_.cols() > 50)
       for(int j=0; j< re.zu_.cols() ; j++){
         for(int i = 0; i<model.n(); i++){
           ll_current(j,llcol) += model.data.weights(i)*glmmr::maths::log_likelihood(model.data.y(i),xb(i) + re.zu_(i,j),
@@ -1019,7 +1008,7 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood(bool beta) {
       ll_current.col(llcol) *= model.data.weights.sum()/model.n();
     }
   } else {
-#pragma omp parallel for
+#pragma omp parallel for if(re.zu_.cols() > 50)
     for(int j= 0; j< re.zu_.cols() ; j++){
       for(int i = 0; i<model.n(); i++){
         ll_current(j,llcol) += glmmr::maths::log_likelihood(model.data.y(i),xb(i) + re.zu_(i,j),
@@ -1041,7 +1030,7 @@ inline double glmmr::ModelOptim<modeltype>::full_log_likelihood(){
   double ll = log_likelihood();
   double logl = 0;
   MatrixXd Lu = model.covariance.Lu(re.u(false));
-#pragma omp parallel for reduction (+:logl)
+#pragma omp parallel for reduction (+:logl) if(Lu.cols() > 50)
   for(int i = 0; i < Lu.cols(); i++){
     logl += model.covariance.log_likelihood(Lu.col(i));
   }
@@ -1100,14 +1089,51 @@ template<typename modeltype>
 inline void glmmr::ModelOptim<modeltype>::generate_czz()
 {
   CZZ.resize(Q(),Q());
+  CZZ = MatrixXd::Identity(Q(), Q());
   matrix.W.update();
   VectorXd w = matrix.W.W();
-  MatrixXd Winv = w.array().inverse().matrix().asDiagonal().toDenseMatrix();
-  MatrixXd X = model.linear_predictor.X();
-  MatrixXd XtWX = X.transpose() * Winv * X;
-  XtWX = XtWX.llt().solve(MatrixXd::Identity(P(),P()));
-  MatrixXd S = Winv - Winv * (X * (XtWX * X.transpose())) * Winv;
-  CZZ = model.covariance.Z().transpose() * S * model.covariance.Z();
+  // w = w.array().inverse().matrix();
+  bool nonlinear_w = model.family.family != Fam::gaussian || (model.data.weights != 1).any();
+  if (control.reml) {
+      MatrixXd X = model.linear_predictor.X();
+      MatrixXd WX = X;
+      if (nonlinear_w) {
+          WX = w.asDiagonal() * X;
+      }
+      MatrixXd XtWX = X.transpose() * WX;
+      WX = model.covariance.Z().transpose() * WX;
+      // WX.applyOnTheLeft(model.covariance.Z().transpose());
+      XtWX = XtWX.llt().solve(MatrixXd::Identity(P(), P()));
+      MatrixXd WZ = model.covariance.Z();
+      if (nonlinear_w) {
+        WZ = w.asDiagonal() * WZ;
+          //WZ.applyOnTheLeft(w.asDiagonal());
+      }
+
+      MatrixXd ZWZ = model.covariance.Z().transpose() * WZ;
+      CZZ = ZWZ - WX * (XtWX * WX.transpose());
+      if (!nonlinear_w) CZZ *= 1.0 / model.data.var_par;
+  }
+  else {
+      MatrixXd WZ = model.covariance.Z();
+      if (nonlinear_w) {
+        WZ = w.asDiagonal() * WZ;
+          //WZ.applyOnTheLeft(w.asDiagonal());
+      }
+      CZZ = model.covariance.Z().transpose() * WZ;
+      if (!nonlinear_w) CZZ *= 1.0 / model.data.var_par;
+  }
+  MatrixXd D = model.covariance.D();
+  //D = D.llt().solve(MatrixXd::Identity(Q(), Q()));
+  
+  if (model.covariance.all_group_re()) {
+      for (int i = 0; i < D.rows(); i++) D(i, i) = 1 / D(i, i);
+  }
+  else {
+      D = D.llt().solve(MatrixXd::Identity(Q(), Q()));
+  }  
+  CZZ += D;
+  CZZ = CZZ.llt().solve(MatrixXd::Identity(Q(), Q()));
 }
 
 template<typename modeltype>
@@ -1213,7 +1239,7 @@ inline void glmmr::ModelOptim<modeltype>::nr_beta(){
     nvar_par.setConstant(1.0);
   }
   
-#pragma omp parallel for
+//#pragma omp parallel for
   for(int i = 0; i < niter; ++i){
     VectorXd w = glmmr::maths::dhdmu(zd.col(i),model.family);
     w = ((w.array() *nvar_par).inverse() * model.data.weights).matrix();
@@ -1236,12 +1262,32 @@ inline void glmmr::ModelOptim<modeltype>::nr_beta(){
   VectorXd Wum = Wu.rowwise().mean();
   VectorXd bincr = XtWXm * X.transpose() * Wum;
   update_beta(model.linear_predictor.parameter_vector() + bincr);
-  calculate_var_par();
+  //calculate_var_par();
   
   // repopulate loglikelihood history - assumes NR can 
   // only be used with MCEM for the theta parameters - TO DO: allow NR for beta and SAEM for theta
   current_ll_values.first = log_likelihood();
   current_ll_var.first = (ll_current.col(0) - ll_current.col(0).mean()).square().sum() / (ll_current.col(0).size() - 1);
+}
+
+template<typename modeltype>
+inline void glmmr::ModelOptim<modeltype>::laplace_beta_u() {
+    matrix.W.update();
+    bool nonlinear_w = model.family.family != Fam::gaussian || (model.data.weights != 1).any();
+    VectorXd w = matrix.W.W();
+    MatrixXd infomat = matrix.template observed_information_matrix<IM::EIM>();
+    infomat = infomat.llt().solve(MatrixXd::Identity(P() + Q(), P() + Q()));
+    VectorXd params(P() + Q());
+    MatrixXd WX = (model.linear_predictor.X()).transpose();
+    if (nonlinear_w) WX *= w.asDiagonal().toDenseMatrix();
+    MatrixXd ZL = (model.covariance.ZL()).transpose();
+    if (nonlinear_w) ZL *= w.asDiagonal().toDenseMatrix(); 
+    params.head(P()) = WX * model.data.y;
+    params.tail(Q()) = ZL * model.data.y;
+    VectorXd newparams = infomat * params;
+    if (!nonlinear_w) newparams *= (1.0 / model.data.var_par);
+    update_beta(newparams.head(P()));
+    update_u(newparams.tail(Q()));
 }
 
 template<typename modeltype>
@@ -1262,7 +1308,7 @@ inline void glmmr::ModelOptim<modeltype>::laplace_nr_beta_u(){
   params += infomat*pderiv;
   update_beta(params.head(P()));
   update_u(params.tail(Q()));
-  calculate_var_par();
+  //calculate_var_par();
 }
 
 template<typename modeltype>
@@ -1281,36 +1327,59 @@ inline void glmmr::ModelOptim<modeltype>::calculate_var_par(){
   if(model.family.family==Fam::gaussian || model.family.family==Fam::quantile_scaled){
     // revise this for beta and Gamma re residuals
     if(control.reml){
-      // reml update of marginal variance parameter
-      MatrixXd SigmaInv = matrix.Sigma(true);
+      // using Diffey 2017
+      // generate_czz();
+      re.zu_ = model.covariance.ZLu(re.u_);
+      VectorXd resid = (model.data.y - re.zu_.col(0));
       MatrixXd X = model.linear_predictor.X();
-      MatrixXd Z = model.covariance.Z();
-      
-      VectorXd xb = model.linear_predictor.xb();
-      ArrayXd resid = (model.data.y.array() - xb.array());
-      resid *= model.data.weights.sqrt();
-      
-      MatrixXd M = matrix.template observed_information_matrix<IM::EIM2>();
-      M = M.llt().solve(MatrixXd::Identity(P()+Q(),P()+Q()));
-      // MatrixXd SX = SigmaInv * X;
-      // MatrixXd PP = SigmaInv - SX * M.topLeftCorner(P(),P()) * SX.transpose();
-      // VectorXd e = model.data.var_par * model.data.weights.inverse().matrix().asDiagonal() * PP * model.data.y;
-      VectorXd e = model.data.var_par * SigmaInv * resid.matrix();
-      M.topLeftCorner(P(),P()) = X * M.topLeftCorner(P(),P()) * X.transpose();
-      M.bottomRightCorner(Q(),Q()) = Z * M.bottomRightCorner(Q(),Q()) * Z.transpose();
-      double new_var_par;
-      if((model.data.weights != 1).any()){
-        new_var_par = (1.0/model.n()) * (e.transpose() * e + (model.data.weights.inverse().matrix().asDiagonal()*M).trace());
+      MatrixXd XW = X;
+      bool weighted = (model.data.weights != 1).any();
+      if (weighted) XW.applyOnTheLeft(model.data.weights.matrix().asDiagonal());
+      MatrixXd XWX = X.transpose() * XW;
+      XWX = XWX.llt().solve(MatrixXd::Identity(XWX.rows(),XWX.cols()));
+      MatrixXd U = -1.0* XW * XWX * XW.transpose();
+      if(weighted){
+        U = U + model.data.weights.matrix().asDiagonal().toDenseMatrix();
       } else {
-        new_var_par = (1.0/model.n()) * (e.transpose()* e + M.trace());
+        U += MatrixXd::Identity(U.rows(),U.cols());
       }
+      MatrixXd ZUZC = model.covariance.Z().transpose() * U * model.covariance.Z();
+      ZUZC *= CZZ;
+      double new_var_par = (1.0 /( model.n() - X.cols())) * (resid.transpose() * U * resid + ZUZC.trace());
+      
+      // reml update of marginal variance parameter
+      // Rcpp::Rcout << "\nGen sigma inverse";
+      // MatrixXd SigmaInv = matrix.Sigma(true);
+      // Rcpp::Rcout << "\nGen other matrices";
+      // MatrixXd XZ(model.n(), P()+Q());
+      // XZ.leftCols(P()) = model.linear_predictor.X();
+      // XZ.rightCols(Q()) = model.covariance.Z();
+      // 
+      // VectorXd xb = model.linear_predictor.xb();
+      // ArrayXd resid = (model.data.y.array() - xb.array());
+      // bool weighted = (model.data.weights != 1).any();
+      // Rcpp::Rcout << "\nGen Infomat";
+      // MatrixXd M = matrix.template observed_information_matrix<IM::EIM2>();
+      // M = M.llt().solve(MatrixXd::Identity(P()+Q(),P()+Q()));
+      // Rcpp::Rcout << "\nGen XZM";
+      // MatrixXd XZMZX = XZ * M * XZ.transpose();
+      // Rcpp::Rcout << "\nGen e";
+      // VectorXd e = model.data.var_par * SigmaInv * resid.matrix();
+      // double new_var_par;
+      // if(weighted){
+      //   XZMZX = model.data.weights.matrix().asDiagonal() * XZMZX;
+      //   double sumw = model.data.weights.sum();
+      //   new_var_par = (1.0/sumw) * (e.transpose() * e + XZMZX.trace()); //(model.data.weights.inverse().matrix().asDiagonal()* X * M.topLeftCorner(P(), P()) * X.transpose()).trace() + (model.data.weights.inverse().matrix().asDiagonal() * Z * M.bottomRightCorner(Q(), Q()) * Z.transpose()).trace());
+      // } else {
+      //   new_var_par = (1.0/model.n()) * (e.transpose()* e + XZMZX.trace());//(X * M.topLeftCorner(P(), P()) * X.transpose()).trace() + (Z * M.bottomRightCorner(Q(), Q()) * Z.transpose()).trace()
+      // }
       update_var_par(new_var_par);
     } else {
       int niter = re.u(false).cols();
       ArrayXd sigmas(niter);
       sigmas.setZero();
       MatrixXd zd = matrix.linpred();
-#pragma omp parallel for
+#pragma omp parallel for if(niter > 50)
       for(int i = 0; i < niter; ++i){
         VectorXd zdu = glmmr::maths::mod_inv_func(zd.col(i), model.family.link);
         ArrayXd resid = (model.data.y - zdu);
@@ -1338,7 +1407,7 @@ inline double glmmr::ModelOptim<modeltype>::aic(){
   MatrixXd Lu = re.u();
   int dof = P() + model.covariance.npar();
   double logl = 0;
-#pragma omp parallel for reduction (+:logl)
+#pragma omp parallel for reduction (+:logl) if(Lu.cols() > 50)
   for(int i = 0; i < Lu.cols(); i++){
     logl += model.covariance.log_likelihood(Lu.col(i));
   }

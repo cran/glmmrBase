@@ -770,9 +770,9 @@ Model <- R6::R6Class("Model",
                            pwr <- pnorm(abs(self$mean$parameters/v0) - qnorm(1-alpha/2))
                          } else {
                            if(alternative == "pos"){
-                             pwr <- pnorm(self$mean$parameters/v0 - qnorm(1-alpha/2))
+                             pwr <- pnorm(self$mean$parameters/v0 - qnorm(1-alpha))
                            } else {
-                             pwr <- pnorm(-self$mean$parameters/v0 - qnorm(1-alpha/2))
+                             pwr <- pnorm(-self$mean$parameters/v0 - qnorm(1-alpha))
                            }
                          }
                          
@@ -968,7 +968,7 @@ Model <- R6::R6Class("Model",
                                        reml = TRUE,
                                        mcmc.pkg = "rstan",
                                        se.theta = TRUE,
-                                       algo = ifelse(self$mean$any_nonlinear(),2,1),
+                                       algo = 2,
                                        lower.bound = NULL,
                                        upper.bound = NULL,
                                        lower.bound.theta = NULL,
@@ -985,6 +985,7 @@ Model <- R6::R6Class("Model",
                            private$verify_data(y)
                            private$set_y(y)
                          }
+                         if(private$model_type() > 0 & reml == TRUE) stop("REML not available with HSGP/NNGP approximations, please set reml=FALSE")
                          Model__use_attenuation(private$ptr,private$attenuate_parameters,private$model_type())
                          if(!se %in% c("gls","kr","kr2","bw","sat","bwrobust","box"))stop("Option se not recognised")
                          if(self$family[[1]]%in%c("Gamma","beta") & se %in% c("kr","kr2","sat"))stop("KR standard errors are not currently available with gamma or beta families")
@@ -1084,7 +1085,10 @@ Model <- R6::R6Class("Model",
                                                                                                       ycont = array(0,dim = 1),
                                                                                                       q = 0,
                                                                                                       n = array(0,dim = 1)))
-                         if(self$family[[1]]=="binomial")data <- append(data,list(N_binom  = self$n(), n = self$trials))
+                         if(self$family[[1]]=="binomial"){
+                           data$N_binom = self$n()
+                           data$n = self$trials
+                         }
                          if(self$family[[1]]%in%c("beta","Gamma","quantile","quantile_scaled"))data$sigma = rep(self$var_par,self$n())
                          if(self$family[[1]]%in%c("quantile","quantile_scaled"))data$q = self$family$q
                          iter <- 0
@@ -1149,9 +1153,10 @@ Model <- R6::R6Class("Model",
                                                                     iter_sampling = n_mcmc_sampling,
                                                                     refresh = 50))
                                } else {
+                                 
                                  suppressWarnings(fit <- rstan::sampling(stanmodels[[file_type$file]],
                                                                          data=data,
-                                                                         chains=chains,
+                                                                         chains=self$mcmc_options$chains,
                                                                          iter = self$mcmc_options$warmup+n_mcmc_sampling,
                                                                          warmup = self$mcmc_options$warmup,
                                                                          refresh = 50))
@@ -1448,6 +1453,7 @@ Model <- R6::R6Class("Model",
                            private$verify_data(y)
                            private$set_y(y)
                          }
+                         if(private$model_type() > 0 & reml == TRUE) stop("REML not available with HSGP/NNGP approximations, please set reml=FALSE")
                          Model__use_attenuation(private$ptr,private$attenuate_parameters,private$model_type())
                          if(!se %in% c("gls","kr","kr2","bw","sat","bwrobust","box"))stop("Option se not recognised")
                          if(self$family[[1]]%in%c("Gamma","beta") & (se == "kr"||se == "kr2"||se == "sat"))stop("KR standard errors are not currently available with gamma or beta families")
@@ -1482,7 +1488,7 @@ Model <- R6::R6Class("Model",
                            iter <- iter + 1
                            if(private$trace >= 1)cat("\nIter: ",iter,"\n",Reduce(paste0,rep("-",40)))
                            if(method=="nr"){
-                             Model__laplace_nr_beta_u(private$ptr,private$model_type())
+                             Model__laplace_beta_u(private$ptr,private$model_type())
                            } else {
                              if(algo %in% c(1,3)){
                                tryCatch(Model__laplace_ml_beta_u(private$ptr,2,private$model_type()),
@@ -1687,16 +1693,30 @@ Model <- R6::R6Class("Model",
                              }
                            }
                            data <- list(
-                             N = self$n(),
                              Q = Model__Q(private$ptr,private$model_type()),
                              Xb = Model__xb(private$ptr,private$model_type()),
                              Z = Model__ZL(private$ptr,private$model_type()),
-                             y = Model__y(private$ptr,private$model_type()),
                              type=as.numeric(file_type$type)
                            )
-                           if(self$family[[1]]=="gaussian")data <- append(data,list(sigma = self$var_par/self$weights))
-                           if(self$family[[1]]=="binomial")data <- append(data,list(n = self$trials))
-                           if(self$family[[1]]%in%c("beta","Gamma"))data <- append(data,list(var_par = self$var_par))
+                           if(self$family[[1]]%in%c("gaussian","beta","Gamma","quantile","quantile_scaled"))data <- append(data,list(N_cont = self$n(),
+                                                                                                                                     N_int = 1,
+                                                                                                                                     N_binom = 1,
+                                                                                                                                     sigma = rep(self$var_par/self$weights, self$n()),
+                                                                                                                                     ycont = Model__y(private$ptr,private$model_type()),
+                                                                                                                                     yint = array(0,dim = 1),
+                                                                                                                                     q = 0,
+                                                                                                                                     n = array(0,dim = 1)))
+                           if(self$family[[1]]%in%c("binomial","bernoulli","poisson"))data <- append(data,list(N_int = self$n(),
+                                                                                                               N_cont = 1,
+                                                                                                               N_binom = 1,
+                                                                                                               sigma = array(0,dim = 1),
+                                                                                                               yint = Model__y(private$ptr,private$model_type()),
+                                                                                                               ycont = array(0,dim = 1),
+                                                                                                               q = 0,
+                                                                                                               n = array(0,dim = 1)))
+                           if(self$family[[1]]=="binomial")data <- append(data,list(N_binom  = self$n(), n = self$trials))
+                           if(self$family[[1]]%in%c("beta","Gamma","quantile","quantile_scaled"))data$sigma = rep(self$var_par,self$n())
+                           if(self$family[[1]]%in%c("quantile","quantile_scaled"))data$q = self$family$q
                            if(private$trace <= 1){
                              if(private$trace==1)message("Starting MCMC sampling. Set self$trace(2) for detailed output")
                              if(mcmc.pkg == "cmdstan"){
