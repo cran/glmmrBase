@@ -1,7 +1,7 @@
-f101c95169a80ef5a3526dcdded1c827 *DESCRIPTION
+dd9c3d1bc9b79af425cd78aa38dc3f16 *DESCRIPTION
 915b253de4e19df2da245c2156643adc *NAMESPACE
 0d048d493175b0571ff7619bfc522c79 *R/Betadist.R
-5e39fe0ed959f64ef92ff849c53accc9 *R/R6Model.R
+f08c5765d9561ff79c3f4b9bca8d7777 *R/R6Model.R
 2e775903054dabe038d3bdd77fa8ef0e *R/R6covariance.R
 bf05376bbbfaf75a7360bfa89008d44a *R/R6meanfunction.R
 ea05d409448f2edf60931ddbf21cecec *R/RcppExports.R
@@ -13,7 +13,7 @@ bd4287bd989d8e3511a0035abd87b3a5 *R/printfunctions.R
 23c0fc36c295d531ef891befb05f1a2a *R/quantiledist.R
 f54667170dd61fbceea864ddde8a6871 *R/stanmodels.R
 76d8ff12e1e6b2e515961ea707f6b2a5 *README.md
-1f722566a1c5e40ebff3333e9c7bb197 *build/partial.rdb
+05afb4953eb0ea7bf33f7aebc88fe8f7 *build/partial.rdb
 7e297a31e37e77c201a2bacff2f979eb *configure
 845efca43973cdde1a6174faf1d88e99 *configure.win
 207f0bfae6393e3a185e8c61ae7526b2 *data/Salamanders.rda
@@ -41,7 +41,7 @@ a01cca3ed5dd2d90207dff82e27f0bc8 *inst/include/glmmr/modelbits.hpp
 2419fbdab2c76249aae80e362dbb3733 *inst/include/glmmr/modelextradata.hpp
 f40477c6529d8e42032a8f9eadaf084d *inst/include/glmmr/modelmatrix.hpp
 4c502fb30162abea3b4ffa9c5b6fa1f5 *inst/include/glmmr/modelmcmc.hpp
-4561e5377a8612dc5e4a928cbdc14e9b *inst/include/glmmr/modeloptim.hpp
+5b1d6e98d5b481936be7ebed82b48dbd *inst/include/glmmr/modeloptim.hpp
 1d8931c02264d7bf5cc25202ee82f255 *inst/include/glmmr/nngpcovariance.hpp
 9feb22830ca93fb5df92d6b68c76be51 *inst/include/glmmr/openmpheader.h
 c8a37ebeb4443b6316dbe0a08d689875 *inst/include/glmmr/optim/bobyqa_algo.h
@@ -64,7 +64,7 @@ da53c9e8a5ee5813e9197da61f4a184a *inst/include/glmmr/optim/optim.h
 e083ad81e7dbec61fa2591dcbc506b4f *inst/include/glmmr/sparse.h
 855c064dbf8deaff96c8dc8a87169109 *inst/include/stan_meta_header.hpp
 2ac02033af196352a7b7d7a8681a74d6 *inst/stan/include/license.stan
-58614da8a498d17367a09083ff35eac3 *inst/stan/mcml.stan
+084be6ae62a7ccddb15dd024b6e4ed62 *inst/stan/mcml.stan
 d55fb4caabaf6a8b27d276c6156ec462 *man/Beta.Rd
 12db242328b2b1ba15e8f580b1ad4d32 *man/Covariance.Rd
 ec59cfee00e92e306928768b647acb05 *man/MeanFunction.Rd
@@ -113,4 +113,4 @@ f64c672f3b373b7c7d4757cfa7d06c5c *src/Makevars.win
 f589f98c6ba604d2624b62e40c114a28 *src/RcppExports.cpp
 6bd09c179393fcb50e399315ca4e1337 *src/model_module.cpp
 6eb4d80871d0bbf1369074979df9e186 *src/stanExports_mcml.cc
-957e2993a9d52928785e97fe7ff19b96 *src/stanExports_mcml.h
+7d397669e0ec8ff1b48416cae391032e *src/stanExports_mcml.h
