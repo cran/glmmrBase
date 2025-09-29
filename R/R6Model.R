@@ -85,6 +85,7 @@ Model <- R6::R6Class("Model",
                          if(private$attenuate_parameters != curr_state){
                            private$genW()
                          }
+                         return(invisible(self))
                        },
                        #' @description
                        #' Return fitted values. Does not account for the random effects. For simulated values based
@@ -476,6 +477,7 @@ Model <- R6::R6Class("Model",
                          self$mean$subset_rows(index)
                          self$covariance$subset(index)
                          private$update_ptr(TRUE)
+                         return(invisible(self))
                        },
                        #'@description
                        #'Generates a realisation of the design
@@ -633,6 +635,7 @@ Model <- R6::R6Class("Model",
                              Model__set_var_par(private$ptr,var.par,private$model_type())
                            }
                          }
+                         return(invisible(self))
                        },
                        #' @description
                        #' Generates the information matrix of the mixed model GLS estimator (X'S^-1X). The inverse of this matrix is an 
@@ -845,8 +848,9 @@ Model <- R6::R6Class("Model",
                        #'@param y Optional. A numeric vector of outcome data. If this is not provided then either the outcome must have been specified when 
                        #' initialising the Model object, or the outcome data has been updated using member function `update_y()`
                        #'@param method The MCML algorithm to use, either `mcem` or `mcnr`, or `saem` see Details. Default is `saem`. `mcem.adapt` and `mcnr.adapt` will use adaptive 
-                       #'MCMC sample sizes starting small and increasing to the the maximum value specified in `mcmc_options$sampling`, which results in faster convergence. `saem` uses a
-                       #'stochastic approximation expectation maximisation algorithm. MCMC samples are kept from all iterations and so a smaller number of samples are needed per iteration. 
+                       #'MCMC sample sizes starting small and increasing to the the maximum value specified in `mcmc_options$sampling`, which may result in faster convergence. `saem` uses a
+                       #'stochastic approximation expectation maximisation algorithm. MCMC samples are kept from all iterations and so a smaller number of samples are needed per iteration. The
+                       #'qualifier `.dual` can also be added (e.g. `saem.dual`), which combines the fixed and covariance parameter estimation steps.
                        #'@param tol Numeric value, tolerance of the MCML algorithm, the maximum difference in parameter estimates
                        #'between iterations at which to stop the algorithm. If two values are provided then different tolerances will be 
                        #'applied to the fixed effect and covariance parameters.
@@ -867,6 +871,11 @@ Model <- R6::R6Class("Model",
                        #' of the calculation, so can be disabled if required in larger models. Has no effect for Kenward-Roger standard errors.
                        #'@param algo Integer. 1 = L-BFGS for beta and BOBYQA for theta, 2 = BOBYQA for both, 3 = L-BFGS for both (default). The L-BFGS algorithm 
                        #'may perform poorly with some covariance structures, in this case select 1 or 2, or apply an upper bound.
+                       #'@param iter.warmup Integer. The number of warmup iterations for each MCMC run on each iteration of the algorithm. If this value is left as NULL then the value stored in self$mcmc_options$warmup will be used.
+                       #'@param iter.sampling Integer. The number of sampling iterations for each MCMC run on each iteration of the algorithm. The default values have been selected to provide 
+                       #'relatively good convergence for the default SAEM algorithm, but may need to be increased for MCEM and MCNR. If an adaptive algorithm is used, then this is the maximum 
+                       #'number of iterations per MCMC run. If this value is left as NULL then the value stored in self$mcmc_options$samps will be used.
+                       #'@param chains Integer. The number of MCMC chains to run in parallel. The default is one, which generally provides good results. If this value is left as NULL then the value stored in self$mcmc_options$chains will be used.
                        #'@param lower.bound Optional. Vector of lower bounds for the fixed effect parameters. To apply bounds use MCEM.
                        #'@param upper.bound Optional. Vector of upper bounds for the fixed effect parameters. To apply bounds use MCEM.
                        #'@param lower.bound.theta Optional. Vector of lower bounds for the covariance parameters (default is 0; negative values will cause an error)
@@ -881,6 +890,8 @@ Model <- R6::R6Class("Model",
                        #'4 = The probabilities of improvement in the log-likelihood the fixed effects and covariance parameters are both less than 1 - `convergence.prob`
                        #'@param skip.theta Logical. If TRUE then the covariance parameter estimation step is skipped. This option is mainly used for testing, but may be useful
                        #'if covariance parameters are known.
+                       #'@param constr.zero Scalar. A Soft sum-to-zero constraint can be forced on the random effects so that their sum is N(0,constr.zero*Q). Small values, e.g. 0.001
+                       #'may be useful if there is possible identifiability issues for intercept terms, such as in more complex, or higher dimensional, random effects structures like spatial models.
                        #'@return A `mcml` object
                        #'@seealso \link[glmmrBase]{Model}, \link[glmmrBase]{Covariance}, \link[glmmrBase]{MeanFunction}
                        #'@examples
@@ -965,10 +976,13 @@ Model <- R6::R6Class("Model",
                                        max.iter = 50,
                                        se = "gls",
                                        oim = FALSE,
-                                       reml = TRUE,
+                                       reml = FALSE,
                                        mcmc.pkg = "rstan",
                                        se.theta = TRUE,
                                        algo = 2,
+                                       iter.warmup = NULL,
+                                       iter.sampling = NULL,
+                                       chains = NULL,
                                        lower.bound = NULL,
                                        upper.bound = NULL,
                                        lower.bound.theta = NULL,
@@ -977,7 +991,8 @@ Model <- R6::R6Class("Model",
                                        convergence.prob = 0.95,
                                        pr.average = FALSE,
                                        conv.criterion = 2,
-                                       skip.theta = FALSE){
+                                       skip.theta = FALSE,
+                                       constr.zero = 1){
                          # Checks on options and data
                          if(is.null(y)){
                            if(!private$y_has_been_updated)stop("y not specified and not updated in Model object")
@@ -992,6 +1007,13 @@ Model <- R6::R6Class("Model",
                          if(se != "gls" & private$model_type() != 0)stop("Only GLS standard errors supported for GP approximations.")
                          if(se == "box" & !(self$family[[1]]=="gaussian"&self$family[[2]]=="identity"))stop("Box only available for linear models")
                          if(!mcmc.pkg %in% c("cmdstan","rstan","hmc"))stop("mcmc.pkg must be one of cmdstan, rstan, or hmc")
+                         if(grepl(".dual",method)){
+                           if(method == "mcnr.dual")stop("MCNR does not have a dual optimisation strategy.")
+                           dual <- TRUE
+                           method <- gsub(".dual","",method)
+                         } else {
+                           dual <- FALSE
+                         }
                          if(!method %in% c("mcem", "mcnr", "saem", "mcem.adapt", "mcnr.adapt"))stop("method must be either mcem, mcnr, saem, mcem.adapt, mcnr.adapt")
                          if(self$family[[1]]%in%c("quantile","quantile_scaled") & method == "mcnr")stop("MCNR with quantile currently disabled, please use SAEM or MCEM with MCML")
                          append_u <- FALSE
@@ -1016,7 +1038,7 @@ Model <- R6::R6Class("Model",
                            Model__set_bound(private$ptr,upper.bound,TRUE,FALSE,private$model_type())
                          }
                          if(!is.null(lower.bound.theta)){
-                           if(any(lower.bound.theta < 0))stop("Theta lower bound cannot be negative")
+                           if(any(lower.bound.theta < 0) & !Model__log_re(private$ptr,private$model_type()))stop("Theta lower bound cannot be negative with non-log functions")
                            Model__set_bound(private$ptr,lower.bound.theta,FALSE,TRUE,private$model_type())
                          }
                          if(!is.null(upper.bound.theta)){
@@ -1029,9 +1051,15 @@ Model <- R6::R6Class("Model",
                          }
                          Model__use_reml(private$ptr,reml,private$model_type())
                          Model__reset_fn_counter(private$ptr,private$model_type())
+                         if(!is.null(iter.sampling))self$mcmc_options$samps <- iter.sampling
+                         if(!is.null(iter.warmup))self$mcmc_options$warmup <- iter.warmup
+                         if(!is.null(iter.warmup))self$mcmc_options$chains <- chains
                          # set up all the required vectors and data to monitor the algorithm
                          balgo <- ifelse(algo %in% c(1,3) ,2,0) # & !self$mean$any_nonlinear()
-                         if(method == "saem") balgo <- 0
+                         if(method == "saem" & balgo == 2) {
+                           message("saem does not work well with L-BFGS, switching optimiser")
+                           balgo <- 0
+                         } 
                          beta <- self$mean$parameters
                          theta <- self$covariance$parameters
                          var_par <- self$var_par
@@ -1067,7 +1095,8 @@ Model <- R6::R6Class("Model",
                            Q = Model__Q(private$ptr,private$model_type()),
                            Xb = Model__xb(private$ptr,private$model_type()),
                            Z = Model__ZL(private$ptr,private$model_type()),
-                           type=as.numeric(file_type$type)
+                           type=as.numeric(file_type$type),
+                           constr_zero = constr.zero
                          )
                          if(self$family[[1]]%in%c("gaussian","beta","Gamma","quantile","quantile_scaled"))data <- append(data,list(N_cont = self$n(),
                                                                                   N_int = 1,
@@ -1125,7 +1154,7 @@ Model <- R6::R6Class("Model",
                            if(mcmc.pkg == "cmdstan" | mcmc.pkg == "rstan"){
                              data$Xb <-  Model__xb(private$ptr,private$model_type())
                              data$Z <- Model__ZL(private$ptr,private$model_type())
-                             if(self$family[[1]]=="gaussian")data$sigma = var_par_new/self$weights
+                             if(self$family[[1]]=="gaussian")data$sigma = sqrt(var_par_new/self$weights)
                              if(self$family[[1]]%in%c("beta","Gamma"))data$var_par = var_par_new
                              if(private$trace <= 1){
                                if(mcmc.pkg == "cmdstan"){
@@ -1175,22 +1204,27 @@ Model <- R6::R6Class("Model",
                            }
                            if(private$trace==2)t2 <- Sys.time()
                            if(private$trace==2)cat("\nMCMC sampling took: ",t2-t1,"s")
-                           if(method=="mcem" | method=="saem"){
-                             Model__ml_beta(private$ptr,balgo,private$model_type())
+                           if(dual){
+                             Model__ml_all(private$ptr,balgo,private$model_type())
                            } else {
-                             Model__nr_beta(private$ptr,private$model_type())
-                           }
-                           if(!skip.theta){
-                             if(algo == 3){ #& !self$mean$any_nonlinear()
-                               tryCatch(Model__ml_theta(private$ptr,2,private$model_type()),
-                                        error = function(e) {
-                                          if(private$trace >= 1)cat("\nL-BFGS failed for theta, switching to BOBYQA");
-                                          Model__ml_theta(private$ptr,0,private$model_type());
-                                        })
+                             if(method=="mcem" | method=="saem"){
+                               Model__ml_beta(private$ptr,balgo,private$model_type())
                              } else {
-                               Model__ml_theta(private$ptr,0,private$model_type())
+                               Model__nr_beta(private$ptr,private$model_type())
+                             }
+                             if(!skip.theta){
+                               if(algo == 3){ #& !self$mean$any_nonlinear()
+                                 tryCatch(Model__ml_theta(private$ptr,2,private$model_type()),
+                                          error = function(e) {
+                                            if(private$trace >= 1)cat("\nL-BFGS failed for theta, switching to BOBYQA");
+                                            Model__ml_theta(private$ptr,0,private$model_type());
+                                          })
+                               } else {
+                                 Model__ml_theta(private$ptr,0,private$model_type())
+                               }
                              }
                            }
+                           
                            # set up the vectors needed 
                            beta_new <- Model__get_beta(private$ptr,private$model_type())
                            theta_new <- Model__get_theta(private$ptr,private$model_type())
@@ -1209,16 +1243,18 @@ Model <- R6::R6Class("Model",
                              llvar <- Model__ll_diff_variance(private$ptr, TRUE, conv.criterion==2, private$model_type())
                              if(adaptive) n_mcmc_sampling <- max(n_mcmc_sampling, min(self$mcmc_options$samps, ceiling(llvar * (qnorm(convergence.prob) + qnorm(0.8))^2)/uval^2))
                              if(conv.criterion %in% c(2,3)){
-                               conv.criterion.value <- uval + qnorm(convergence.prob)*sqrt(llvar/n_mcmc_sampling)
-                               prob.converged <- pnorm(-uval/sqrt(llvar/n_mcmc_sampling))
+                               nmult <- ifelse(method == "saem", iter^alpha, 1)
+                               conv.criterion.value <- uval + qnorm(convergence.prob)*sqrt(llvar/(n_mcmc_sampling*nmult))
+                               prob.converged <- pnorm(-uval/sqrt(llvar/(n_mcmc_sampling*nmult)))
                                converged <- conv.criterion.value < 0
                              } 
                              if(conv.criterion == 4){
+                               nmult <- ifelse(method == "saem", iter^alpha, 1)
                                llvart <- Model__ll_diff_variance(private$ptr, FALSE, TRUE, private$model_type())
-                               conv.criterion.value <- udiagnostic$first + qnorm(convergence.prob)*sqrt(llvar/n_mcmc_sampling)
-                               prob.converged <- pnorm(-udiagnostic$first/sqrt(llvar/n_mcmc_sampling))
-                               conv.criterion.valuet <- udiagnostic$second + qnorm(convergence.prob)*sqrt(llvart/n_mcmc_sampling)
-                               prob.convergedt <- pnorm(-udiagnostic$second/sqrt(llvart/n_mcmc_sampling))
+                               conv.criterion.value <- udiagnostic$first + qnorm(convergence.prob)*sqrt(llvar/(n_mcmc_sampling*nmult))
+                               prob.converged <- pnorm(-udiagnostic$first/sqrt(llvar/(n_mcmc_sampling*nmult)))
+                               conv.criterion.valuet <- udiagnostic$second + qnorm(convergence.prob)*sqrt(llvart/(n_mcmc_sampling*nmult))
+                               prob.convergedt <- pnorm(-udiagnostic$second/sqrt(llvart/(n_mcmc_sampling*nmult)))
                                converged <- conv.criterion.value < 0 & conv.criterion.valuet < 0
                              }
                            }
@@ -1234,8 +1270,8 @@ Model <- R6::R6Class("Model",
                              cat("\nMax. difference : ", round(max(abs(all_pars-all_pars_new)),5))
                              cat("\nLog-likelihoods: beta ", round(llvals$first,5)," theta ",round(llvals$second,5))
                              cat("\nFn evaluations: beta ",fn_counter$first," theta ",fn_counter$second)
+                             if(adaptive)cat("\nMCMC sample size (adaptive): ",n_mcmc_sampling)
                              if(iter>1){
-                               if(adaptive)cat("\nMCMC sample size (adaptive): ",n_mcmc_sampling)
                                cat("\nLog-lik diff values: ", round(udiagnostic$first,5),", ", round(udiagnostic$second,5)," overall: ", round(Reduce(sum,udiagnostic), 5))
                                cat("\nLog-lik variance: ", round(llvar,5))
                                if(conv.criterion >= 2)cat(" convergence criterion:", ifelse(conv.criterion == 4, " (beta) "," "), round(conv.criterion.value,5)," Prob.: ",round(prob.converged,3))
@@ -1437,11 +1473,11 @@ Model <- R6::R6Class("Model",
                                      method = "nr",
                                      se = "gls",
                                      oim = FALSE,
-                                     reml = TRUE,
+                                     reml = FALSE,
                                      max.iter = 40,
                                      tol = 1e-4,
                                      se.theta = TRUE,
-                                     algo = 2,
+                                     algo = 0,
                                      lower.bound = NULL,
                                      upper.bound = NULL,
                                      lower.bound.theta = NULL,
@@ -1535,28 +1571,37 @@ Model <- R6::R6Class("Model",
                          self$var_par <- var_par_new
                          u <- Model__u(private$ptr,TRUE,private$model_type())
                          if(private$trace >= 1)cat("\n\nCalculating standard errors...\n")
-                         if(se == "gls" || se =="bw" || se == "box"){
-                           M <- self$information_matrix()#Matrix::solve(Model__obs_information_matrix(private$ptr,private$model_type()))[1:length(beta),1:length(beta)]
-                           M <- solve(M)
-                           if(se.theta){
-                             SE_theta <- tryCatch(sqrt(diag(solve(Model__infomat_theta(private$ptr,private$model_type())))), error = rep(NA, ncovpar))
-                           } else {
-                             SE_theta <- rep(NA, ncovpar)
-                           }
-                         } else if(se == "robust" || se == "bwrobust" ){
-                           M <- Model__sandwich(private$ptr,private$model_type())
-                           if(se.theta){
-                             SE_theta <- tryCatch(sqrt(diag(Model__infomat_theta(private$ptr,private$model_type()))), error = rep(NA, ncovpar))
-                           } else {
-                             SE_theta <- rep(NA, ncovpar)
-                           }
-                         } else if(se == "kr" || se == "kr2" || se == "sat"){
-                           krtype <- ifelse(se=="kr",1,ifelse(se=="kr2",4,5))
-                           Mout <- Model__small_sample_correction(private$ptr,krtype,oim,private$model_type())
-                           M <- Mout[[1]]
-                           SE_theta <- sqrt(diag(Mout[[2]]))
+                         if(private$model_type()==0){
+                           if(se == "gls" || se == "bw" || se == "box"){
+                             M <- self$information_matrix() #Matrix::solve(Model__obs_information_matrix(private$ptr,private$model_type()))[1:length(beta),1:length(beta)]
+                             M <- solve(M)
+                             if(se.theta){
+                               SE_theta <- tryCatch(sqrt(diag(solve(Model__infomat_theta(private$ptr,private$model_type())))), error = rep(NA, ncovpar))
+                             } else {
+                               SE_theta <- rep(NA, ncovpar)
+                             }
+                           } else if(se == "robust" || se == "bwrobust"){
+                             M <- Model__sandwich(private$ptr,private$model_type())
+                             if(se.theta){
+                               SE_theta <- tryCatch(sqrt(diag(Model__infomat_theta(private$ptr,private$model_type()))), error = rep(NA, ncovpar))
+                             } else {
+                               SE_theta <- rep(NA, ncovpar)
+                             }
+                           } else if(se == "kr" || se == "kr2" || se == "sat"){
+                             ss_type <- ifelse(se=="kr",1,ifelse(se=="kr2",4,5))
+                             Mout <- Model__small_sample_correction(private$ptr,ss_type,oim,private$model_type())
+                             M <- Mout[[1]]
+                             SE_theta <- sqrt(diag(Mout[[2]]))
+                           } 
+                         } else {
+                           # crudely calculate the information matrix for GP approximations - this will be integrated into the main
+                           # library in future versions, but can cause error/crash with the above methods
+                           M <- self$information_matrix()#Model__information_matrix_crude(private$ptr,private$model_type())
+                           nB <- nrow(M)
+                           M <- tryCatch(solve(M), error = matrix(NA,nrow = nB,ncol=nB))
+                           SE_theta <- rep(NA, ncovpar)
                          }
-                         SE <- sqrt(Matrix::diag(M))
+                         SE <- sqrt(diag(M))
                          repar_table <- self$covariance$parameter_table()
                          beta_names <- Model__beta_parameter_names(private$ptr,private$model_type())
                          theta_names <- repar_table$term
@@ -1666,16 +1711,19 @@ Model <- R6::R6Class("Model",
                              self$covariance$sparse(sparse,amd)
                            }
                            private$useSparse = sparse
-                         } 
+                         }
+                         return(invisible(self))
                        },
                        #' @description 
                        #' Generate an MCMC sample of the random effects
-                       #' @param mcmc.pkg String. Either `cmdstan` for cmdstan (requires the package `cmdstanr`), `rstan` to use rstan sampler, or
-                       #'`hmc` to use a cruder Hamiltonian Monte Carlo sampler. cmdstan is recommended as it has by far the best number 
-                       #' of effective samples per unit time. cmdstanr will compile the MCMC programs to the library folder the first time they are run, 
-                       #' so may not currently be an option for some users.
+                       #' @param mcmc.pkg String. Either `cmdstan` for cmdstan (requires the package `cmdstanr`) or `rstan` to use rstan sampler (the default)
+                       #' @param scaled Logical. The random effects are sampled from an N(0,I) distribution. If TRUE this function returns the random effects rescaled to N(0,D), otherwise it returns the original samples.
+                       #' @param constr.zero Scalar. A Soft sum-to-zero constraint can be forced on the random effects so that their sum is N(0,constr.zero*Q). Small values, e.g. 0.001
+                       #' may be useful if there is possible identifiability issues for intercept terms, such as in more complex, or higher dimensional, random effects structures like spatial models.
                        #' @return A matrix of samples of the random effects
-                       mcmc_sample = function(mcmc.pkg = "rstan"){
+                       mcmc_sample = function(mcmc.pkg = "rstan",
+                                              scaled = TRUE,
+                                              constr.zero = 1){
                          if(!mcmc.pkg %in% c("cmdstan","rstan","hmc"))stop("mcmc.pkg must be one of cmdstan, rstan, or hmc")
                          if(!private$y_has_been_updated) stop("No y data has been added")
                          if(mcmc.pkg == "cmdstan" | mcmc.pkg == "rstan"){
@@ -1692,16 +1740,18 @@ Model <- R6::R6Class("Model",
                                mod <- suppressMessages(cmdstanr::cmdstan_model(model_file))
                              }
                            }
+                           # SET UP MCMC DATA STRUCTURE
                            data <- list(
                              Q = Model__Q(private$ptr,private$model_type()),
                              Xb = Model__xb(private$ptr,private$model_type()),
                              Z = Model__ZL(private$ptr,private$model_type()),
-                             type=as.numeric(file_type$type)
+                             type=as.numeric(file_type$type),
+                             constr_zero = constr.zero
                            )
                            if(self$family[[1]]%in%c("gaussian","beta","Gamma","quantile","quantile_scaled"))data <- append(data,list(N_cont = self$n(),
                                                                                                                                      N_int = 1,
                                                                                                                                      N_binom = 1,
-                                                                                                                                     sigma = rep(self$var_par/self$weights, self$n()),
+                                                                                                                                     sigma = self$var_par/self$weights,
                                                                                                                                      ycont = Model__y(private$ptr,private$model_type()),
                                                                                                                                      yint = array(0,dim = 1),
                                                                                                                                      q = 0,
@@ -1714,53 +1764,61 @@ Model <- R6::R6Class("Model",
                                                                                                                ycont = array(0,dim = 1),
                                                                                                                q = 0,
                                                                                                                n = array(0,dim = 1)))
-                           if(self$family[[1]]=="binomial")data <- append(data,list(N_binom  = self$n(), n = self$trials))
+                           if(self$family[[1]]=="binomial"){
+                             data$N_binom = self$n()
+                             data$n = self$trials
+                           }
                            if(self$family[[1]]%in%c("beta","Gamma","quantile","quantile_scaled"))data$sigma = rep(self$var_par,self$n())
                            if(self$family[[1]]%in%c("quantile","quantile_scaled"))data$q = self$family$q
-                           if(private$trace <= 1){
-                             if(private$trace==1)message("Starting MCMC sampling. Set self$trace(2) for detailed output")
-                             if(mcmc.pkg == "cmdstan"){
-                               capture.output(fit <- mod$sample(data = data,
-                                                                chains = 1,
-                                                                iter_warmup = self$mcmc_options$warmup,
-                                                                iter_sampling = self$mcmc_options$samps,
-                                                                refresh = 0),
-                                              file=tempfile())
+                           
+                           if(mcmc.pkg == "cmdstan" | mcmc.pkg == "rstan"){
+                             data$Xb <-  Model__xb(private$ptr,private$model_type())
+                             data$Z <- Model__ZL(private$ptr,private$model_type())
+                             if(private$trace <= 1){
+                               if(mcmc.pkg == "cmdstan"){
+                                 capture.output(fit <- mod$sample(data = data,
+                                                                  chains = self$mcmc_options$chains,
+                                                                  iter_warmup = self$mcmc_options$warmup,
+                                                                  iter_sampling = self$mcmc_options$samps,
+                                                                  refresh = 0),
+                                                file=tempfile())
+                               } else {
+                                 capture.output(suppressWarnings(fit <- rstan::sampling(stanmodels[[file_type$file]],
+                                                                                        data=data,
+                                                                                        chains=self$mcmc_options$chains,
+                                                                                        iter = self$mcmc_options$warmup+self$mcmc_options$samps,
+                                                                                        warmup = self$mcmc_options$warmup,
+                                                                                        refresh = 0)),
+                                                file=tempfile())
+                               }
                              } else {
-                               capture.output(fit <- rstan::sampling(stanmodels[[file_type$file]],
-                                                                     data=data,
-                                                                     chains=1,
-                                                                     iter = self$mcmc_options$warmup+self$mcmc_options$samps,
-                                                                     warmup = self$mcmc_options$warmup,
-                                                                     refresh = 0),
-                                              file=tempfile())
+                               # warnings have been suppressed below as it warns about R-hat etc, which is not reliable with a single chain.
+                               if(mcmc.pkg == "cmdstan"){
+                                 suppressWarnings(fit <- mod$sample(data = data,
+                                                                    chains = self$mcmc_options$chains,
+                                                                    iter_warmup = self$mcmc_options$warmup,
+                                                                    iter_sampling = self$mcmc_options$samps,
+                                                                    refresh = 50))
+                               } else {
+                                 
+                                 suppressWarnings(fit <- rstan::sampling(stanmodels[[file_type$file]],
+                                                                         data=data,
+                                                                         chains=self$mcmc_options$chains,
+                                                                         iter = self$mcmc_options$warmup+self$mcmc_options$samps,
+                                                                         warmup = self$mcmc_options$warmup,
+                                                                         refresh = 50))
+                               }
                              }
-                           } else {
                              if(mcmc.pkg == "cmdstan"){
-                               fit <- mod$sample(data = data,
-                                                 chains = 1,
-                                                 iter_warmup = self$mcmc_options$warmup,
-                                                 iter_sampling = self$mcmc_options$samps,
-                                                 refresh = 50)
+                               dsamps <- fit$draws("gamma",format = "matrix")
+                               class(dsamps) <- "matrix"
                              } else {
-                               fit <- rstan::sampling(stanmodels[[file_type$file]],
-                                                      data=data,
-                                                      chains=1,
-                                                      iter = self$mcmc_options$warmup+self$mcmc_options$samps,
-                                                      warmup = self$mcmc_options$warmup,
-                                                      refresh = 50)
+                               dsamps <- rstan::extract(fit,pars = "gamma",permuted = FALSE)
+                               dsamps <- as.matrix(dsamps[,1,])
                              }
+                             Model__update_u(private$ptr,t(dsamps),FALSE,private$model_type())
                            }
-                           if(mcmc.pkg == "cmdstan"){
-                             dsamps <- fit$draws("gamma",format = "matrix")
-                             class(dsamps) <- "matrix"
-                           } else {
-                             dsamps <- rstan::extract(fit,"gamma",FALSE)
-                             dsamps <- as.matrix(dsamps[,1,])
-                           }
-                           if(private$trace==1)message("Sampling complete, updating model")
-                           Model__update_u(private$ptr,as.matrix(t(dsamps)),private$model_type())
-                           dsamps <- Matrix::Matrix(Model__L(private$ptr, private$model_type()) %*% Matrix::t(dsamps)) #check this
+                           if(scaled)dsamps <- Model__ZL(private$ptr, private$model_type()) %*% t(dsamps) 
                          } else {
                            Model__use_attenuation(private$ptr,private$attenuate_parameters, private$model_type())
                            Model__mcmc_set_lambda(private$ptr,self$mcmc_options$lambda, private$model_type())
@@ -1768,7 +1826,7 @@ Model <- R6::R6Class("Model",
                            Model__mcmc_set_refresh(private$ptr,self$mcmc_options$refresh, private$model_type())
                            Model__mcmc_sample(private$ptr,self$mcmc_options$warmup,self$mcmc_options$samps,self$mcmc_options$adapt, private$model_type())
                            dsamps <- Model__u(private$ptr,TRUE, private$model_type())
-                           dsamps <- Matrix::Matrix(Model__L(private$ptr, private$model_type()) %*% dsamps)
+                           if(scaled)dsamps <- Matrix::Matrix(Model__L(private$ptr, private$model_type()) %*% dsamps)
                          }
                          return(invisible(dsamps))
                        },
@@ -1861,7 +1919,7 @@ Model <- R6::R6Class("Model",
                        #'  * `refresh` How frequently to print to console MCMC progress if displaying verbose output.
                        #'  * `maxsteps` (Only relevant for the internal HMC sampler) Integer. The maximum number of steps of the leapfrom integrator
                        mcmc_options = list(warmup = 100,
-                                           samps = 25,
+                                           samps = 50,
                                            chains = 1,
                                            lambda = 1,
                                            refresh = 500,
@@ -1878,6 +1936,7 @@ Model <- R6::R6Class("Model",
                        calculator_instructions = function(){
                          Model__print_names(private$ptr,TRUE, TRUE, private$model_type())
                          Model__print_instructions(private$ptr,private$model_type())
+                         return(invisible(self))
                        },
                        #' @description
                        #' Calculates the marginal effect of variable x. There are several options for 
@@ -1946,6 +2005,7 @@ Model <- R6::R6Class("Model",
                        update_y = function(y){
                          private$verify_data(y)
                          private$set_y(y)
+                         return(invisible(self))
                        },
                        #' @description
                        #' Controls the information printed to the console for other functions. 
@@ -1955,6 +2015,7 @@ Model <- R6::R6Class("Model",
                          if(!trace%in%c(0,1,2))stop("trace must be 0, 1, or 2")
                          private$trace <- trace
                          Model__set_trace(private$ptr,trace, private$model_type())
+                         return(invisible(self))
                        }
                      ),
                      private = list(
@@ -1987,11 +2048,6 @@ Model <- R6::R6Class("Model",
                        update_ptr = function(force = FALSE){
                          if(is.null(private$ptr) | force | private$session_id != Sys.getpid()){
                            if(!self$family[[1]]%in%c("poisson","binomial","gaussian","bernoulli","Gamma","beta","quantile","quantile_scaled"))stop("family must be one of Poisson, Binomial, Gaussian, Gamma, Beta, or quantile")
-                           # if(gsub(" ","",self$mean$formula) != gsub(" ","",self$covariance$formula)){
-                           #   form <- paste0(self$mean$formula,"+",self$covariance$formula)
-                           # } else {
-                           #   form <- gsub(" ","",self$mean$formula)
-                           # }
                            form <- gsub(" ","",self$formula)
                            form <- gsub("~","",self$formula)
                            if(grepl("nngp",form)){
@@ -2007,7 +2063,6 @@ Model <- R6::R6Class("Model",
                              cnames <- which(!colnames(self$mean$data)%in%colnames(data))
                              data <- cbind(data,self$mean$data[,cnames,drop=FALSE])
                            }
-                           #data <- private$process_data(as.formula(paste0("~",form)),data,TRUE,TRUE)
                            if(self$family[[1]]=="bernoulli" & any(self$trials>1))self$family[[1]] <- "binomial"
                            if(is.null(self$covariance$parameters)){
                              if(type == 0){
@@ -2073,8 +2128,6 @@ Model <- R6::R6Class("Model",
                            Model__set_var_par(private$ptr,self$var_par,type)
                            if(self$family[[1]] == "binomial")Model__set_trials(private$ptr,self$trials,type)
                            if(self$family[[1]] %in% c("quantile","quantile_scaled")) Model__set_quantile(private$ptr,self$family$q,type)
-                           # Model__update_beta(private$ptr,self$mean$parameters,type)
-                           # Model__update_theta(private$ptr,self$covariance$parameters,type)
                            Model__update_u(private$ptr,matrix(rnorm(Model__Q(private$ptr,type)),ncol=1),type) # initialise random effects to random
                            Model__mcmc_set_lambda(private$ptr,self$mcmc_options$lambda,type)
                            Model__mcmc_set_max_steps(private$ptr,self$mcmc_options$maxsteps,type)
@@ -2085,6 +2138,9 @@ Model <- R6::R6Class("Model",
                            self$covariance$.__enclos_env__$private$model_ptr <- private$ptr
                            self$covariance$.__enclos_env__$private$ptr <- NULL
                            self$covariance$.__enclos_env__$private$cov_form()
+                           # re=initiliase just in case
+                           Model__update_beta(private$ptr,self$mean$parameters,type)
+                           Model__update_theta(private$ptr,self$covariance$parameters,type)
                            private$session_id <- Sys.getpid()
                          }
                        },

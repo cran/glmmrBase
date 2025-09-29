@@ -27,7 +27,11 @@ enum class CovFunc {
     cauchy30 = 17,
     ar0 = 18,
     ar1 = 19,
-    dist = 20
+    dist = 20,
+    fexplog = 21,
+    arlog = 22,
+    grlog = 23,
+    ar0log = 24
 };
 
 const std::map<str, CovFunc> str_to_covfunc = {
@@ -51,7 +55,11 @@ const std::map<str, CovFunc> str_to_covfunc = {
   {"cauchy30",CovFunc::cauchy30},
   {"ar0", CovFunc::ar0},
   {"ar1", CovFunc::ar1},
-  {"dist",CovFunc::dist}
+  {"dist",CovFunc::dist},
+  {"fexplog", CovFunc::fexplog},
+  {"arlog",CovFunc::arlog},
+  {"grlog",CovFunc::grlog},
+  {"ar0log",CovFunc::ar0log}
 };
 
 // unfortunately need bidirectional map so need to duplicate this unless there's
@@ -77,7 +85,11 @@ const std::map<CovFunc, str> covfunc_to_str = {
   {CovFunc::cauchy30, "cauchy30"},
   {CovFunc::ar0, "ar0"},
   {CovFunc::ar1, "ar1"},
-  {CovFunc::dist, "dist"}
+  {CovFunc::dist, "dist"},
+  {CovFunc::fexplog, "fexplog"},
+  {CovFunc::arlog, "arlog"},
+  {CovFunc::grlog, "grlog"},
+  {CovFunc::ar0log, "ar0log"}
 };
 
 const std::map<CovFunc, int> covfunc_to_nvar = {
@@ -101,15 +113,27 @@ const std::map<CovFunc, int> covfunc_to_nvar = {
   {CovFunc::cauchy30, 1},
   {CovFunc::ar0, 1},
   {CovFunc::ar1, 1},
-  {CovFunc::dist, 0}
+  {CovFunc::dist, 0},
+  {CovFunc::fexplog, 2},
+  {CovFunc::arlog, 2},
+  {CovFunc::grlog, 1},
+  {CovFunc::ar0log, 1}
 };
 
-inline std::vector<Do> interpret_re(const CovFunc& fn){
+inline std::vector<Do> interpret_re(const CovFunc& fn, glmmr::calculator& calc){
+  // TO DO update this function
   using instructs = std::vector<Do>;
   instructs B;
   switch(fn){
   case CovFunc::gr:
     B = {Do::PushParameter}; 
+    calc.push_back_function<Do::PushParameter>();
+    break;
+  case CovFunc::grlog:
+    B = {Do::PushParameter}; 
+    B = {Do::Exp}; 
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Exp>();
     break;
   case CovFunc::ar:
     B.push_back(Do::PushParameter);
@@ -117,6 +141,11 @@ inline std::vector<Do> interpret_re(const CovFunc& fn){
     B.push_back(Do::PushParameter);
     B.push_back(Do::Power);
     B.push_back(Do::Multiply);
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Multiply>();
     break;
   case CovFunc::fexp0:
      {
@@ -124,6 +153,11 @@ inline std::vector<Do> interpret_re(const CovFunc& fn){
       B.push_back(Do::PushParameter);
       B.push_back(Do::PushCovData);
       B.insert(B.end(), C.begin(), C.end());
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::PushCovData>();
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Negate>();
+      calc.push_back_function<Do::Exp>();
       break;
      }
   case CovFunc::fexp:
@@ -132,13 +166,62 @@ inline std::vector<Do> interpret_re(const CovFunc& fn){
        B.push_back(Do::PushParameter);
        B.push_back(Do::PushCovData);
        B.insert(B.end(), C.begin(), C.end());
+       calc.push_back_function<Do::PushParameter>();
+       calc.push_back_function<Do::PushCovData>();
+       calc.push_back_function<Do::Divide>();
+       calc.push_back_function<Do::Negate>();
+       calc.push_back_function<Do::Exp>();
+       calc.push_back_function<Do::PushParameter>();
+       calc.push_back_function<Do::Multiply>();
        break;
     }
+  case CovFunc::fexplog:
+  {
+    const instructs C = {Do::Divide,Do::Negate,Do::Exp,Do::PushParameter,Do::Exp,Do::Multiply};  //var par here
+    B.push_back(Do::PushParameter);
+    B.push_back(Do::Exp);
+    B.push_back(Do::PushCovData);
+    B.insert(B.end(), C.begin(), C.end());
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Exp>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Divide>();
+    calc.push_back_function<Do::Negate>();
+    calc.push_back_function<Do::Exp>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Exp>();
+    calc.push_back_function<Do::Multiply>();
+    break;
+  }
+  case CovFunc::arlog:
+    B.push_back(Do::PushParameter);
+    B.push_back(Do::Exp);
+    B.push_back(Do::PushCovData);
+    B.push_back(Do::PushParameter);
+    B.push_back(Do::Exp);
+    B.push_back(Do::Power);
+    B.push_back(Do::Multiply);
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Exp>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Exp>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Multiply>();
+    break;
   case CovFunc::sqexp0:
     {
       const instructs C1 = {Do::PushParameter,Do::Square,Do::PushCovData,
                             Do::Square,Do::Divide,Do::Negate,Do::Exp};
       B.insert(B.end(), C1.begin(), C1.end());
+      
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Square>();
+      calc.push_back_function<Do::PushCovData>();
+      calc.push_back_function<Do::Square>();
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Negate>();
+      calc.push_back_function<Do::Exp>();
       break;
     }
   case CovFunc::sqexp:
@@ -148,6 +231,16 @@ inline std::vector<Do> interpret_re(const CovFunc& fn){
                             Do::PushParameter,Do::Multiply};
       B.insert(B.end(), C1.begin(), C1.end());
       B.insert(B.end(), C2.begin(), C2.end());
+      
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Square>();
+      calc.push_back_function<Do::PushCovData>();
+      calc.push_back_function<Do::Square>();
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Negate>();
+      calc.push_back_function<Do::Exp>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Multiply>();
       break;
     }
   case CovFunc::bessel:
@@ -156,6 +249,11 @@ inline std::vector<Do> interpret_re(const CovFunc& fn){
       B.push_back(Do::PushParameter);
       B.push_back(Do::PushCovData);
       B.insert(B.end(), C.begin(), C.end());
+      
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::PushCovData>();
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Bessel>();
       break;
     }
   case CovFunc::matern:
@@ -172,77 +270,235 @@ inline std::vector<Do> interpret_re(const CovFunc& fn){
       B.insert(B.end(), C2.begin(), C2.end());
       B.push_back(Do::PushCovData);
       B.insert(B.end(), C3.begin(), C3.end());
+      
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Gamma>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Int1>();
+      calc.push_back_function<Do::Subtract>();
+      calc.push_back_function<Do::Int2>();
+      calc.push_back_function<Do::Power>();
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Int2>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Multiply>();
+      calc.push_back_function<Do::Sqrt>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::PushCovData>();
+
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Multiply>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Power>();
+      calc.push_back_function<Do::Multiply>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Int2>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Multiply>();
+      calc.push_back_function<Do::Sqrt>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::PushCovData>();
+
+      calc.push_back_function<Do::Divide>();
+      calc.push_back_function<Do::Multiply>();
+      calc.push_back_function<Do::BesselK>();
+      calc.push_back_function<Do::Multiply>();
       break;
     }
   case CovFunc::truncpow2:
     {
-      const instructs C = {Do::PushParameter,Do::Int2,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Subtract,Do::Power,Do::Multiply};
+      const instructs C = {Do::PushParameter,Do::Int2,Do::PushParameter,Do::PushCovData,Do::Power,
+                           Do::Int1,Do::Subtract,Do::Power,Do::Multiply};
       B.insert(B.end(), C.begin(), C.end());
+      
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::Int2>();
+      calc.push_back_function<Do::PushParameter>();
+      calc.push_back_function<Do::PushCovData>();
+      calc.push_back_function<Do::Power>();
+      calc.push_back_function<Do::Int1>();
+      calc.push_back_function<Do::Subtract>();
+      calc.push_back_function<Do::Power>();
+      calc.push_back_function<Do::Multiply>();
       break;
     }
   case CovFunc::truncpow3:
   {
-    const instructs C = {Do::PushParameter,Do::Int3,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Subtract,Do::Power,Do::Multiply};
+    const instructs C = {Do::PushParameter,Do::Int3,Do::PushParameter,Do::PushCovData,
+                         Do::Power,Do::Int1,Do::Subtract,Do::Power,Do::Multiply};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Int3>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Subtract>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Multiply>();
     break;
   }
   case CovFunc::truncpow4:
   {
-    const instructs C = {Do::PushParameter,Do::Int4,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Subtract,Do::Power,Do::Multiply};
+    const instructs C = {Do::PushParameter,Do::Int4,Do::PushParameter,Do::PushCovData,
+                         Do::Power,Do::Int1,Do::Subtract,Do::Power,Do::Multiply};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Int4>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Subtract>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Multiply>();
     break;
   }
   case CovFunc::cauchy3:
   {
-    const instructs C = {Do::PushParameter,Do::Int3,Do::Negate,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Add,Do::Power,Do::Multiply};
+    const instructs C = {Do::PushParameter,Do::Int3,Do::Negate,Do::PushParameter,
+                         Do::PushCovData,Do::Power,Do::Int1,Do::Add,Do::Power,Do::Multiply};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Int3>();
+    calc.push_back_function<Do::Negate>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Add>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Multiply>();
     break;
   }
   case CovFunc::cauchy:
   {
-    const instructs C = {Do::PushParameter,Do::PushParameter,Do::PushParameter,Do::Divide,Do::Negate,Do::PushParameter,Do::PushCovData,Do::Power,
-                         Do::Int1,Do::Add,Do::Power,Do::Multiply};
+    const instructs C = {Do::PushParameter,Do::PushParameter,Do::PushParameter,
+                         Do::Divide,Do::Negate,Do::PushParameter,Do::PushCovData,
+                         Do::Power,Do::Int1,Do::Add,Do::Power,Do::Multiply};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Divide>();
+    calc.push_back_function<Do::Negate>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Add>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Multiply>();
     break;
   }
   case CovFunc::truncpow20:
   {
-    const instructs C = {Do::Int2,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Subtract,Do::Power};
+    const instructs C = {Do::Int2,Do::PushParameter,Do::PushCovData,Do::Power,
+                         Do::Int1,Do::Subtract,Do::Power};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::Int2>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Subtract>();
+    calc.push_back_function<Do::Power>();
     break;
   }
   case CovFunc::truncpow30:
   {
-    const instructs C = {Do::Int3,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Subtract,Do::Power};
+    const instructs C = {Do::Int3,Do::PushParameter,Do::PushCovData,Do::Power,
+                         Do::Int1,Do::Subtract,Do::Power};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::Int3>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Subtract>();
+    calc.push_back_function<Do::Power>();
     break;
   }
   case CovFunc::truncpow40:
   {
-    const instructs C = {Do::Int4,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Subtract,Do::Power};
+    const instructs C = {Do::Int4,Do::PushParameter,Do::PushCovData,Do::Power,
+                         Do::Int1,Do::Subtract,Do::Power};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::Int4>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Subtract>();
+    calc.push_back_function<Do::Power>();
     break;
   }
   case CovFunc::cauchy30:
   {
-    const instructs C = {Do::Int3,Do::Negate,Do::PushParameter,Do::PushCovData,Do::Power,Do::Int1,Do::Add,Do::Power};
+    const instructs C = {Do::Int3,Do::Negate,Do::PushParameter,Do::PushCovData,
+                         Do::Power,Do::Int1,Do::Add,Do::Power};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::Int3>();
+    calc.push_back_function<Do::Negate>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Add>();
+    calc.push_back_function<Do::Power>();
     break;
   }
   case CovFunc::cauchy0:
   {
-    const instructs C = {Do::PushParameter,Do::PushParameter,Do::Divide,Do::Negate,Do::PushParameter,Do::PushCovData,Do::Power,
+    const instructs C = {Do::PushParameter,Do::PushParameter,Do::Divide,Do::Negate,
+                         Do::PushParameter,Do::PushCovData,Do::Power,
                          Do::Int1,Do::Add,Do::Power};
     B.insert(B.end(), C.begin(), C.end());
+    
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Divide>();
+    calc.push_back_function<Do::Negate>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::Power>();
+    calc.push_back_function<Do::Int1>();
+    calc.push_back_function<Do::Add>();
+    calc.push_back_function<Do::Power>();
     break;
   }
   case CovFunc::ar1: case CovFunc::ar0:
     B.push_back(Do::PushCovData);
     B.push_back(Do::PushParameter);
     B.push_back(Do::Power);
+    
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Power>();
+    break;
+  case CovFunc::ar0log: 
+    B.push_back(Do::PushCovData);
+    B.push_back(Do::PushParameter);
+    B.push_back(Do::Exp);
+    B.push_back(Do::Power);
+    
+    calc.push_back_function<Do::PushCovData>();
+    calc.push_back_function<Do::PushParameter>();
+    calc.push_back_function<Do::Exp>();
+    calc.push_back_function<Do::Power>();
     break;
   case CovFunc::dist:
     B.push_back(Do::PushCovData);
+    
+    calc.push_back_function<Do::PushCovData>();
     break;
   }
   return B;
@@ -265,10 +521,10 @@ inline intvec interpret_re_par(const CovFunc& fn,
   
   
   switch(fn){
-  case CovFunc::gr:
+  case CovFunc::gr: case CovFunc::grlog:
     B.push_back(par_idx[0]);
     break;
-  case CovFunc::ar: 
+  case CovFunc::ar: case CovFunc::arlog: 
     B.push_back(par_idx[0]);
     addA();
     B.push_back(par_idx[1]);
@@ -277,7 +533,7 @@ inline intvec interpret_re_par(const CovFunc& fn,
     B.push_back(par_idx[0]);
     addA();
     break;
-  case CovFunc::fexp: case CovFunc::sqexp:
+  case CovFunc::fexp: case CovFunc::sqexp: case CovFunc::fexplog:
     B.push_back(par_idx[1]);
     addA();
     B.push_back(par_idx[0]);
@@ -314,7 +570,7 @@ inline intvec interpret_re_par(const CovFunc& fn,
     B.push_back(par_idx[0]);
     addA();
     break;
-  case CovFunc::ar1: case CovFunc::ar0:
+  case CovFunc::ar1: case CovFunc::ar0: case CovFunc::ar0log:
     addA();
     B.push_back(par_idx[0]);
     break;
@@ -341,7 +597,7 @@ inline void re_linear_predictor(glmmr::calculator& calc,
   }
 }
 
-inline void re_log_likelihood(glmmr::calculator& calc,
+inline void relog_likelihood(glmmr::calculator& calc,
                                 const int Q){
   using instructs = std::vector<Do>;
   instructs re_seq = {Do::PushParameter,Do::Square,Do::Add};
@@ -402,115 +658,5 @@ inline void linear_predictor_to_link(glmmr::calculator& calc,
   
   calc.instructions = out;
 }
-
-// // many of these could be optimised better!
-// inline void link_to_likelihood(glmmr::calculator& calc,
-//                                const Fam family){
-//   using instructs = std::vector<Do>;
-//   instructs out;
-//   intvec idx;
-//   
-//   switch (family){
-//     case Fam::gaussian:
-//       {
-//         instructs gaus_instruct = {Do::PushY,Do::Subtract,Do::Square,Do::Divide,Do::Half,
-//                                    Do::Multiply,Do::HalfLog2Pi,Do::Add,
-//                                    Do::PushVariance,Do::Log,Do::Half,
-//                                    Do::Multiply,Do::Add,Do::Negate};
-//         out.push_back(Do::PushVariance);
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),gaus_instruct.begin(),gaus_instruct.end());
-//         break;
-//       }
-//     case Fam::bernoulli:
-//       {
-//         instructs binom_instruct = {Do::Log,Do::Multiply,Do::PushY,Do::Int1,Do::Subtract};
-//         instructs binom_instruct2 = {Do::Int1,Do::Subtract,Do::Log,Do::Multiply,Do::Add};
-//         out.push_back(Do::PushY);
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),binom_instruct.begin(),binom_instruct.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),binom_instruct2.begin(),binom_instruct2.end());
-//         break;
-//       }
-//     case Fam::poisson:
-//       {
-//         out.push_back(Do::PushY);
-//         out.push_back(Do::LogFactorialApprox);
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.push_back(Do::Log);
-//         out.push_back(Do::PushY);
-//         out.push_back(Do::Multiply);
-//         out.push_back(Do::Subtract);
-//         out.push_back(Do::Subtract);
-//         break;
-//       }
-//     case Fam::gamma:
-//       {
-//         instructs gamma_instruct = {Do::PushVariance,Do::PushY,Do::Multiply,Do::Divide};
-//         instructs gamma_instruct2 = {Do::Log,Do::PushVariance,Do::Log,Do::Subtract,
-//                                      Do::PushVariance,Do::Multiply,Do::PushY,Do::Log,
-//                                      Do::Int1,Do::PushVariance,
-//                                      Do::Subtract,Do::Multiply,Do::Add,Do::Subtract};
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),gamma_instruct.begin(),gamma_instruct.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),gamma_instruct2.begin(),gamma_instruct2.end());
-//         break;
-//       }
-//     case Fam::beta:
-//       {
-//         instructs beta_instruct = {Do::PushVariance,Do::Subtract,Do::PushY,Do::Log,Do::Multiply,
-//                                    Do::Int1};
-//         instructs beta_instruct2 = {Do::Int1,Do::Subtract,Do::PushVariance,Do::Multiply,Do::Subtract,
-//                                     Do::PushY,Do::Int1,Do::Subtract,Do::Log,
-//                                     Do::Multiply,Do::Add};
-//         instructs beta_instruct3 = {Do::PushVariance,Do::Multiply,Do::Gamma,Do::Log,Do::Negate,Do::Add};
-//         instructs beta_instruct4 = {Do::Int1,Do::Subtract,Do::PushVariance,Do::Multiply,Do::Gamma,Do::Log,
-//                                     Do::Negate,Do::Add,Do::PushVariance,
-//                                     Do::Gamma,Do::Log,Do::Add};
-//         out.push_back(Do::Int1);
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),beta_instruct.begin(),beta_instruct.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),beta_instruct2.begin(),beta_instruct2.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),beta_instruct3.begin(),beta_instruct3.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),beta_instruct4.begin(),beta_instruct4.end());
-//         break;
-//       }
-//     case Fam::binomial:
-//       {
-//         instructs binom_instruct = {Do::PushY,Do::LogFactorialApprox,Do::PushY,Do::PushVariance,
-//                                     Do::Subtract,Do::Add,Do::PushVariance,
-//                                     Do::LogFactorialApprox,Do::Add};
-//         instructs binom_instruct2 = {Do::Log,Do::PushY,Do::Multiply,Do::Add};
-//         instructs binom_instruct3 = {Do::Int1,Do::Subtract,Do::Log,Do::PushY,Do::PushVariance,
-//                                      Do::Subtract,Do::Multiply,Do::Add};
-//         out.insert(out.end(),binom_instruct.begin(),binom_instruct.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),binom_instruct2.begin(),binom_instruct2.end());
-//         out.insert(out.end(),calc.instructions.begin(),calc.instructions.end());
-//         idx.insert(idx.end(),calc.indexes.begin(),calc.indexes.end());
-//         out.insert(out.end(),binom_instruct3.begin(),binom_instruct3.end());
-//       }
-//   }
-//   calc.instructions = out;
-//   calc.indexes = idx;
-// }
 
 }

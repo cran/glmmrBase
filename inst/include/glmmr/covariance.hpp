@@ -31,6 +31,12 @@ struct ZNonZero {
   int     xcol;
 };
 
+template<typename T, typename ... Vals>
+inline bool any_match(T t, Vals ...vals)
+{
+  return (... || (t == vals));
+}
+
 class Covariance {
 public:
   // objects
@@ -73,6 +79,8 @@ public:
   virtual void      set_sparse(bool sparse, bool amd = true);
   bool              any_group_re() const;
   bool              all_group_re() const;
+  bool              all_log_re() const;
+  bool              any_log_re() const;
   intvec            parameter_fn_index() const;
   virtual intvec    re_count() const;
   virtual sparse    ZL_sparse();
@@ -80,6 +88,7 @@ public:
   strvec            parameter_names();
   virtual void      derivatives(std::vector<MatrixXd>& derivs,int order = 1);
   virtual VectorXd  log_gradient(const MatrixXd &umat, double& logl);
+  virtual MatrixXd  log_gradient(const MatrixXd &umat, VectorXd& logl);
   void              linear_predictor_ptr(glmmr::LinearPredictor* ptr);
  
 protected:
@@ -250,7 +259,9 @@ inline int glmmr::Covariance::parse(){
     }
     
     // if any of the functions are group, then use block functions
-    auto idxgr = std::find(fn.begin(),fn.end(),"gr");
+    strvec grfn {"gr", "grlog"};
+    //auto idxgr = std::find(fn.begin(),fn.end(),"gr");
+    auto idxgr = std::find_first_of(fn.begin(),fn.end(),grfn.begin(),grfn.end());
     dblvec2d groups;
     dblvec vals;
     bool isgr;
@@ -413,7 +424,7 @@ inline int glmmr::Covariance::parse(){
       if(*min_value_iterator < minvalue) minvalue = *min_value_iterator;
     }
     for(int j = 0; j<fn_[i].size();j++){
-      if(fn_[i][j]!=CovFunc::gr){
+      if(fn_[i][j]!=CovFunc::gr && fn_[i][j]!=CovFunc::grlog ){
         nvarfn = re_cols_[i][j].size();
         double dist_val;
         double dist_ab;
@@ -433,7 +444,7 @@ inline int glmmr::Covariance::parse(){
           }
         }
       }
-      std::vector<Do> B = glmmr::interpret_re(fn_[i][j]);
+      std::vector<Do> B = glmmr::interpret_re(fn_[i][j], calc_[i]);
       intvec re_par_less_min_ = re_pars_[i][j];
       for(int k = 0; k < re_pars_[i][j].size(); k++)re_par_less_min_[k] -= minvalue;
       intvec Bpar = glmmr::interpret_re_par(fn_[i][j],j,re_par_less_min_);
@@ -443,6 +454,7 @@ inline int glmmr::Covariance::parse(){
     if(fn_[i].size() > 1){
       for(int j = 0; j < (fn_[i].size()-1); j++){
         fn_instruct.push_back(Do::Multiply);
+        calc_[i].push_back_function<Do::Multiply>();
       }
     }
     calc_[i].instructions = fn_instruct;
@@ -818,11 +830,13 @@ inline MatrixXd glmmr::Covariance::Lu(const MatrixXd& u){
 }
 
 inline double glmmr::Covariance::log_likelihood(const VectorXd &u){
-  if(parameters_.size()==0)throw std::runtime_error("no covariance parameters, cannot calculate log likelihood");
+  //if(parameters_.size()==0)throw std::runtime_error("no covariance parameters, cannot calculate log likelihood");
   double logdet_val=0.0;
   double loglik_val=0.0;
   int obs_counter=0;
   ArrayXd size_B_array(B_);
+  
+  static const double LOG2PI = log(2.0 * M_PI);
   
   if(!isSparse)
   {
@@ -832,29 +846,29 @@ inline double glmmr::Covariance::log_likelihood(const VectorXd &u){
       blocksize = block_dim(b);
       if(blocksize==1){
         double var = get_val(b,0,0);
-        size_B_array[b] = -0.5*log(var) -0.5*log(2*M_PI) -
-          0.5*u(obs_counter)*u(obs_counter)/(var);
+        size_B_array[b] = -0.5*(log(var) + LOG2PI + u(obs_counter)*u(obs_counter)/(var));
       } else {
         zquad.setZero();
-        dmat_matrix.block(0,0,blocksize,blocksize) = get_chol_block(b);
+        dmat_matrix.block(0,0,blocksize,blocksize).noalias() = get_chol_block(b);
         logdet_val = 0.0;
         for(int i = 0; i < blocksize; i++){
           logdet_val += 2*log(dmat_matrix(i,i));
         }
-        zquad.segment(0,blocksize) = glmmr::algo::forward_sub(dmat_matrix,u.segment(obs_counter,blocksize),blocksize);
-        size_B_array[b] = (-0.5*blocksize * log(2*M_PI) - 0.5*logdet_val - 0.5*zquad.transpose()*zquad);
+        zquad.segment(0,blocksize).noalias() = glmmr::algo::forward_sub(dmat_matrix,u.segment(obs_counter,blocksize),blocksize);
+        size_B_array[b] = -0.5*(blocksize * LOG2PI + logdet_val + zquad.transpose()*zquad);
       }
       obs_counter += blocksize;
     }
     loglik_val = size_B_array.sum();
     
   } else {
-    dblvec v(u.data(),u.data()+u.size());
+    static thread_local dblvec v_buffer;
+    v_buffer.assign(u.data(),u.data()+u.size());
     for (auto& k : spchol.D) logdet_val += log(k);
-    spchol.ldl_lsolve(&v[0]);
-    spchol.ldl_d2solve(&v[0]);
-    double quad = glmmr::algo::inner_sum(&v[0],&v[0],Q_);
-    loglik_val = (-0.5*Q_ * log(2*M_PI) - 0.5*logdet_val - 0.5*quad);
+    spchol.ldl_lsolve(&v_buffer[0]);
+    spchol.ldl_d2solve(&v_buffer[0]);
+    double quad = glmmr::algo::inner_sum(&v_buffer[0],&v_buffer[0],Q_);
+    loglik_val = -0.5*(Q_ * LOG2PI + logdet_val + quad);
   }
   return loglik_val;
 }
@@ -1019,13 +1033,19 @@ inline MatrixXd glmmr::Covariance::D_sparse_builder(bool chol,
 
 inline bool glmmr::Covariance::any_group_re() const{
   bool gr = false;
+  const static std::vector<CovFunc> grfns{CovFunc::gr, CovFunc::grlog};
   for(int i = 0; i < fn_.size(); i++){
-    for(int j = 0; j < fn_[i].size(); j++){
-      if(fn_[i][j]==CovFunc::gr){
-        gr = true;
-        break;
-      }
+    auto idxgr = std::find_first_of(fn_[i].begin(), fn_[i].end(),grfns.begin(),grfns.end());
+    if(idxgr != fn_[i].end()){
+      gr = true;
+      break;
     }
+    // for(int j = 0; j < fn_[i].size(); j++){
+    //   if(fn_[i][j]==CovFunc::gr || fn_[i][j]==CovFunc::grlog){
+    //     gr = true;
+    //     break;
+    //   }
+    // }
     if(gr)break;
   }
   return gr;
@@ -1034,11 +1054,44 @@ inline bool glmmr::Covariance::any_group_re() const{
 inline bool glmmr::Covariance::all_group_re() const {
     bool gr = true;
     for (int i = 0; i < fn_.size(); i++) {
-        for (int j = 0; j < fn_[i].size(); j++) {
-            gr = gr && (fn_[i][j] == CovFunc::gr);
-        }
+      for (int j = 0; j < fn_[i].size(); j++) {
+        bool isgr = any_match(fn_[i][j], CovFunc::gr, CovFunc::grlog);
+        gr = gr && isgr;
+      }
     }
     return gr;
+}
+
+inline bool glmmr::Covariance::all_log_re() const {
+  bool logre = true;
+  for (int i = 0; i < fn_.size(); i++) {
+    for (int j = 0; j < fn_[i].size(); j++) {
+      bool anylog = any_match(fn_[i][j], CovFunc::grlog, CovFunc::arlog, CovFunc::ar0log, CovFunc::fexplog);// (fn_[i][j] == CovFunc::grlog || fn_[i][j] == CovFunc::arlog || fn_[i][j] == CovFunc::fexplog || fn_[i][j] == CovFunc::ar0log);
+      logre = logre && anylog;
+    }
+  }
+  return logre;
+}
+
+inline bool glmmr::Covariance::any_log_re() const{
+  bool gr = false;
+  const static std::vector<CovFunc> logfns {CovFunc::grlog, CovFunc::arlog, CovFunc::fexplog, CovFunc::ar0log};
+  
+  for(int i = 0; i < fn_.size(); i++){
+    auto idxgr = std::find_first_of(fn_[i].begin(), fn_[i].end(),logfns.begin(),logfns.end());
+    if(idxgr != fn_[i].end()){
+      gr = true;
+      break;
+    }
+    // for(int j = 0; j < fn_[i].size(); j++){
+    //   if(fn_[i][j] == CovFunc::grlog || fn_[i][j] == CovFunc::arlog || fn_[i][j] == CovFunc::fexplog || fn_[i][j] == CovFunc::ar0log){
+    //     gr = true;
+    //     break;
+    //   }
+    // }
+    if(gr)break;
+  }
+  return gr;
 }
 
 inline strvec glmmr::Covariance::parameter_names(){
@@ -1060,6 +1113,7 @@ inline VectorXd glmmr::Covariance::log_gradient(const MatrixXd &umat, double& lo
  //                   std::transform(omp_out.begin(), omp_out.end(), omp_in.begin(), omp_out.begin(), std::plus<double>())) \
   //                  initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
 
+  static const double LOG_2PI = log(2*M_PI);
   std::vector<MatrixXd> derivs;
   derivatives(derivs,1);
   int npars = derivs.size()-1;
@@ -1086,13 +1140,13 @@ inline VectorXd glmmr::Covariance::log_gradient(const MatrixXd &umat, double& lo
         double var = get_val(b,0,0);
         for(int i = 0; i < niter; i++)
         {
-          size_B_array[b] += -0.5*log(var) -0.5*log(2*M_PI) - 0.5*umat(obs_counter,i)*umat(obs_counter,i)/(var);
+          size_B_array[b] += -0.5*(log(var) + LOG_2PI + umat(obs_counter,i)*umat(obs_counter,i)/(var));
         }
         size_B_array[b] *= 1.0/(double)niter;   
         for(int i = 0; i < npars; i++) dlogdet_vals[i] += derivs[i+1](obs_counter,obs_counter) / var;        
       } else {
         zquad.setZero();
-        dmat_matrix.block(0,0,blocksize,blocksize) = get_chol_block(b);
+        dmat_matrix.block(0,0,blocksize,blocksize).noalias() = get_chol_block(b);
         logdet_val = 0.0;
         for(int i = 0; i < blocksize; i++)
         {
@@ -1111,25 +1165,25 @@ inline VectorXd glmmr::Covariance::log_gradient(const MatrixXd &umat, double& lo
         for(int i = 0; i < niter; i++)
         {
           VectorXd ozquad = Lmat.triangularView<Lower>().solve(umat.col(i).segment(obs_counter, blocksize)); //glmmr::algo::forward_sub(dmat_matrix, umat.col(i).segment(obs_counter, blocksize), blocksize);
-          baccuml += (-0.5*blocksize * log(2*M_PI) - 0.5*logdet_val - 0.5*ozquad.transpose()*ozquad);
+          baccuml += -0.5*(blocksize * LOG_2PI + logdet_val + ozquad.transpose()*ozquad);
           VectorXd zzquad = LmatT.triangularView<Upper>().solve(ozquad); //glmmr::algo::backward_sub(dmat_matrix.transpose(), ozquad, blocksize);
           for(int j = 0; j < npars; j++)
           {
             dqf[j] += zzquad.transpose() * derivs[j+1].block(obs_counter, obs_counter, blocksize, blocksize) * zzquad;
           }
         }
-        size_B_array[b] = baccuml / (double)niter;
-        for(int j = 0; j < npars; j++) dqf[j] *= -1.0 / (double) niter;
+        size_B_array[b] += baccuml / (double)niter;
+        for(int j = 0; j < npars; j++) dqf[j] *= 1.0 / (double) niter;
       }
       obs_counter += blocksize;
     }
     logl = size_B_array.sum();
     for(int i = 0; i < npars; i++)
     {
-      grad(i) = 0.5*dlogdet_vals[i] - 0.5*dqf[i];
+      grad(i) = -0.5*(dlogdet_vals[i] + dqf[i]);
     }
   } else {
-    for (auto& k : spchol.D) logdet_val += log(k);
+    for (const auto& k : spchol.D) logdet_val += log(k);
     MatrixXd Lmat = sparse_to_dense(matL);
     MatrixXd LmatT = Lmat.transpose();
     for(int i = 0; i < npars; i++)
@@ -1138,17 +1192,18 @@ inline VectorXd glmmr::Covariance::log_gradient(const MatrixXd &umat, double& lo
         MatrixXd detmat2 = LmatT.triangularView<Upper>().solve(detmat);
         grad(i) += detmat2.trace();
       }
-    logl += -0.5*Q_ * log(2*M_PI) - 0.5*logdet_val;
+    logl += -0.5*(Q_ * LOG_2PI + logdet_val);
     double qf = 0;
 // #pragma omp parallel for reduction(+:qf) reduction(vec_dbl_plus : dqf)
+    static thread_local dblvec v_buffer;
     for(int i = 0; i < niter; i++)
     {
       VectorXd ucol = umat.col(i);
-      dblvec v(ucol.data(),ucol.data()+ucol.size());     
-      spchol.ldl_lsolve(&v[0]);
-      spchol.ldl_d2solve(&v[0]);      
-      qf += glmmr::algo::inner_sum(&v[0],&v[0],Q_);    
-      VectorXd vvec = Map<VectorXd>(v.data(), v.size());
+      v_buffer.assign(ucol.data(),ucol.data()+ucol.size());     
+      spchol.ldl_lsolve(&v_buffer[0]);
+      spchol.ldl_d2solve(&v_buffer[0]);      
+      qf += glmmr::algo::inner_sum(&v_buffer[0],&v_buffer[0],Q_);    
+      VectorXd vvec = Map<VectorXd>(v_buffer.data(), v_buffer.size());
       VectorXd zzquad = LmatT.triangularView<Upper>().solve(vvec); 
       for(int j = 0; j < npars; j++)
       {
@@ -1157,11 +1212,9 @@ inline VectorXd glmmr::Covariance::log_gradient(const MatrixXd &umat, double& lo
     }
     for(int j = 0; j < npars; j++)
     {
-      grad(j) -= dqf[j] / (double) niter;
-      grad(j) *= 0.5;
+      grad(j) += -0.5* dqf[j] / (double) niter;
     } 
-    qf *= 1.0 / (double) niter;
-    logl -= 0.5 * qf;
+    logl += -0.5 * qf / (double) niter;
   }
 
 #if defined(R_BUILD) && defined(ENABLE_DEBUG)
@@ -1170,6 +1223,106 @@ inline VectorXd glmmr::Covariance::log_gradient(const MatrixXd &umat, double& lo
   Rcpp::Rcout << "\nGRADIENT: " << grad.transpose();
   Rcpp::Rcout << "\nLOG-LIK.: " << logl;
 #endif 
+  return grad;
+}
+
+inline MatrixXd glmmr::Covariance::log_gradient(const MatrixXd &umat, VectorXd& logl){
+  
+  static const double LOG_2PI = log(2*M_PI);
+  std::vector<MatrixXd> derivs;
+  derivatives(derivs,1);
+  int npars = derivs.size()-1;
+  int niter = umat.cols();
+  MatrixXd grad(npars, umat.cols());
+  grad.setZero();
+  
+  double logdet_val=0.0;
+  dblvec dlogdet_vals(npars);
+  std::fill(dlogdet_vals.begin(), dlogdet_vals.end(), 0.0);
+  int obs_counter=0;
+  ArrayXd size_B_array(B_);
+  dblvec dqf(npars);
+  std::fill(dqf.begin(), dqf.end(), 0.0);
+  logl.setZero();
+  
+  if(!isSparse)
+  {
+    int blocksize;
+    size_B_array.setZero();
+    for(int b=0;b<B_;b++){
+      blocksize = block_dim(b);
+      if(blocksize==1){
+        double var = get_val(b,0,0);
+        for(int i = 0; i < niter; i++)
+        {
+          logl(i) += -0.5*(log(var) + LOG_2PI + umat(obs_counter,i)*umat(obs_counter,i)/(var));
+        }
+        for(int i = 0; i < npars; i++) dlogdet_vals[i] += derivs[i+1](obs_counter,obs_counter) / var;        
+      } else {
+        zquad.setZero();
+        dmat_matrix.block(0,0,blocksize,blocksize).noalias() = get_chol_block(b);
+        logdet_val = 0.0;
+        for(int i = 0; i < blocksize; i++)
+        {
+          logdet_val += 2*log(dmat_matrix(i,i));
+        }
+        MatrixXd Lmat = dmat_matrix.block(0,0,blocksize,blocksize);
+        MatrixXd LmatT = Lmat.transpose();
+        for(int i = 0; i < npars; i++)
+        {
+          MatrixXd detmat = Lmat.triangularView<Lower>().solve(derivs[i+1].block(obs_counter,obs_counter,blocksize,blocksize));
+          MatrixXd detmat2 = LmatT.triangularView<Upper>().solve(detmat);
+          dlogdet_vals[i] += detmat2.trace();
+        }
+        for(int i = 0; i < niter; i++)
+        {
+          VectorXd ozquad = Lmat.triangularView<Lower>().solve(umat.col(i).segment(obs_counter, blocksize)); 
+          logl(i) += -0.5*(blocksize * LOG_2PI + logdet_val + ozquad.transpose()*ozquad);
+          VectorXd zzquad = LmatT.triangularView<Upper>().solve(ozquad); 
+          for(int j = 0; j < npars; j++)
+          {
+            grad(j,i) += -0.5*(dlogdet_vals[j] + zzquad.transpose() * derivs[j+1].block(obs_counter, obs_counter, blocksize, blocksize) * zzquad);
+          }
+        }
+      }
+      obs_counter += blocksize;
+    }
+  } else {
+    for (const auto& k : spchol.D) logdet_val += log(k);
+    MatrixXd Lmat = sparse_to_dense(matL);
+    MatrixXd LmatT = Lmat.transpose();
+    for(int i = 0; i < npars; i++)
+    {
+      MatrixXd detmat = Lmat.triangularView<Lower>().solve(derivs[i+1]);
+      MatrixXd detmat2 = LmatT.triangularView<Upper>().solve(detmat);
+      grad.row(i).array() += detmat2.trace();
+    }
+    logl.array() += -0.5*(Q_ * LOG_2PI + logdet_val);
+    double qf = 0;
+    static thread_local dblvec v_buffer;
+    for(int i = 0; i < niter; i++)
+    {
+      VectorXd ucol = umat.col(i);
+      v_buffer.assign(ucol.data(),ucol.data()+ucol.size());     
+      spchol.ldl_lsolve(&v_buffer[0]);
+      spchol.ldl_d2solve(&v_buffer[0]);      
+      logl(i) += -0.5*(glmmr::algo::inner_sum(&v_buffer[0],&v_buffer[0],Q_));    
+      VectorXd vvec = Map<VectorXd>(v_buffer.data(), v_buffer.size());
+      VectorXd zzquad = LmatT.triangularView<Upper>().solve(vvec); 
+      for(int j = 0; j < npars; j++)
+      {
+        grad(j,i) += -0.5*(zzquad.transpose() * derivs[j+1] * zzquad)(0);
+      }
+    }
+  }
+  
+#if defined(R_BUILD) && defined(ENABLE_DEBUG)
+  Rcpp::Rcout << "\nTHETA: ";
+  for(const auto& x: parameters_) Rcpp::Rcout << x << " ";
+  Rcpp::Rcout << "\nGRADIENT: " << grad.transpose();
+  Rcpp::Rcout << "\nLOG-LIK.: " << logl;
+#endif 
+  
   return grad;
 }
 

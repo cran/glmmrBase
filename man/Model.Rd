@@ -994,10 +994,13 @@ Stochastic Maximum Likelihood model fitting
   max.iter = 50,
   se = "gls",
   oim = FALSE,
-  reml = TRUE,
+  reml = FALSE,
   mcmc.pkg = "rstan",
   se.theta = TRUE,
   algo = 2,
+  iter.warmup = NULL,
+  iter.sampling = NULL,
+  chains = NULL,
   lower.bound = NULL,
   upper.bound = NULL,
   lower.bound.theta = NULL,
@@ -1006,7 +1009,8 @@ Stochastic Maximum Likelihood model fitting
   convergence.prob = 0.95,
   pr.average = FALSE,
   conv.criterion = 2,
-  skip.theta = FALSE
+  skip.theta = FALSE,
+  constr.zero = 1
 )}\if{html}{\out{</div>}}
 }
 
@@ -1017,8 +1021,9 @@ Stochastic Maximum Likelihood model fitting
 initialising the Model object, or the outcome data has been updated using member function \code{update_y()}}
 
 \item{\code{method}}{The MCML algorithm to use, either \code{mcem} or \code{mcnr}, or \code{saem} see Details. Default is \code{saem}. \code{mcem.adapt} and \code{mcnr.adapt} will use adaptive
-MCMC sample sizes starting small and increasing to the the maximum value specified in \code{mcmc_options$sampling}, which results in faster convergence. \code{saem} uses a
-stochastic approximation expectation maximisation algorithm. MCMC samples are kept from all iterations and so a smaller number of samples are needed per iteration.}
+MCMC sample sizes starting small and increasing to the the maximum value specified in \code{mcmc_options$sampling}, which may result in faster convergence. \code{saem} uses a
+stochastic approximation expectation maximisation algorithm. MCMC samples are kept from all iterations and so a smaller number of samples are needed per iteration. The
+qualifier \code{.dual} can also be added (e.g. \code{saem.dual}), which combines the fixed and covariance parameter estimation steps.}
 
 \item{\code{tol}}{Numeric value, tolerance of the MCML algorithm, the maximum difference in parameter estimates
 between iterations at which to stop the algorithm. If two values are provided then different tolerances will be
@@ -1048,6 +1053,14 @@ of the calculation, so can be disabled if required in larger models. Has no effe
 \item{\code{algo}}{Integer. 1 = L-BFGS for beta and BOBYQA for theta, 2 = BOBYQA for both, 3 = L-BFGS for both (default). The L-BFGS algorithm
 may perform poorly with some covariance structures, in this case select 1 or 2, or apply an upper bound.}
 
+\item{\code{iter.warmup}}{Integer. The number of warmup iterations for each MCMC run on each iteration of the algorithm. If this value is left as NULL then the value stored in self$mcmc_options$warmup will be used.}
+
+\item{\code{iter.sampling}}{Integer. The number of sampling iterations for each MCMC run on each iteration of the algorithm. The default values have been selected to provide
+relatively good convergence for the default SAEM algorithm, but may need to be increased for MCEM and MCNR. If an adaptive algorithm is used, then this is the maximum
+number of iterations per MCMC run. If this value is left as NULL then the value stored in self$mcmc_options$samps will be used.}
+
+\item{\code{chains}}{Integer. The number of MCMC chains to run in parallel. The default is one, which generally provides good results. If this value is left as NULL then the value stored in self$mcmc_options$chains will be used.}
+
 \item{\code{lower.bound}}{Optional. Vector of lower bounds for the fixed effect parameters. To apply bounds use MCEM.}
 
 \item{\code{upper.bound}}{Optional. Vector of upper bounds for the fixed effect parameters. To apply bounds use MCEM.}
@@ -1070,6 +1083,9 @@ will result in lower bias but slower convergence, values closer to 1 will result
 
 \item{\code{skip.theta}}{Logical. If TRUE then the covariance parameter estimation step is skipped. This option is mainly used for testing, but may be useful
 if covariance parameters are known.}
+
+\item{\code{constr.zero}}{Scalar. A Soft sum-to-zero constraint can be forced on the random effects so that their sum is N(0,constr.zero*Q). Small values, e.g. 0.001
+may be useful if there is possible identifiability issues for intercept terms, such as in more complex, or higher dimensional, random effects structures like spatial models.}
 }
 \if{html}{\out{</div>}}
 }
@@ -1170,11 +1186,11 @@ Maximum Likelihood model fitting with Laplace Approximation
   method = "nr",
   se = "gls",
   oim = FALSE,
-  reml = TRUE,
+  reml = FALSE,
   max.iter = 40,
   tol = 1e-04,
   se.theta = TRUE,
-  algo = 2,
+  algo = 0,
   lower.bound = NULL,
   upper.bound = NULL,
   lower.bound.theta = NULL,
@@ -1282,16 +1298,18 @@ None, called for effects
 \subsection{Method \code{mcmc_sample()}}{
 Generate an MCMC sample of the random effects
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Model$mcmc_sample(mcmc.pkg = "rstan")}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Model$mcmc_sample(mcmc.pkg = "rstan", scaled = TRUE, constr.zero = 1)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{mcmc.pkg}}{String. Either \code{cmdstan} for cmdstan (requires the package \code{cmdstanr}), \code{rstan} to use rstan sampler, or
-\code{hmc} to use a cruder Hamiltonian Monte Carlo sampler. cmdstan is recommended as it has by far the best number
-of effective samples per unit time. cmdstanr will compile the MCMC programs to the library folder the first time they are run,
-so may not currently be an option for some users.}
+\item{\code{mcmc.pkg}}{String. Either \code{cmdstan} for cmdstan (requires the package \code{cmdstanr}) or \code{rstan} to use rstan sampler (the default)}
+
+\item{\code{scaled}}{Logical. The random effects are sampled from an N(0,I) distribution. If TRUE this function returns the random effects rescaled to N(0,D), otherwise it returns the original samples.}
+
+\item{\code{constr.zero}}{Scalar. A Soft sum-to-zero constraint can be forced on the random effects so that their sum is N(0,constr.zero*Q). Small values, e.g. 0.001
+may be useful if there is possible identifiability issues for intercept terms, such as in more complex, or higher dimensional, random effects structures like spatial models.}
 }
 \if{html}{\out{</div>}}
 }

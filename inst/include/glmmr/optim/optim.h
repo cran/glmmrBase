@@ -166,8 +166,11 @@ inline void optim<T(const std::vector<T>&),BOBYQA>::minimise(){
       upper_bound.resize(dim);
       for(int i = 0; i< dim; i++)upper_bound[i] = R_PosInf;
     }
-    double max_par = *std::max_element(current_values.begin(),current_values.end());
-    if (!control.rhobeg) control.rhobeg = std::min(0.95, 0.2*max_par);
+    double max_par = *std::max_element(current_values.begin(),current_values.end(),[](const double& a, const double& b)
+    {
+      return abs(a) < abs(b);
+    });
+    if (!control.rhobeg) control.rhobeg = std::min(0.95, std::max(0.2*max_par, 0.2));
     if (!control.rhoend) control.rhoend = 1.0e-6 * control.rhobeg;    
     if (!control.maxfun) control.maxfun = 10000;
     std::vector<double> w;
@@ -374,10 +377,10 @@ class optim<double(const VectorXd&, VectorXd&),LBFGS> {
   using func = double(*)(void*, const VectorXd&, VectorXd&); 
 public:
   struct optimControl {
-    double g_epsilon = 1.0e-8;
-    double past = 3;
-    double delta = 1.0e-8;
-    int max_linesearch = 64;
+    double g_epsilon = 1.0e-5;
+    double past = 0;
+    double delta = 0;
+    int max_linesearch = 20;
     int trace = 0;
   } control;
   
