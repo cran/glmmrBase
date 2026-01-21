@@ -1,21 +1,19 @@
 Package: glmmrBase
 Type: Package
 Title: Generalised Linear Mixed Models in R
-Version: 1.1.0
-Date: 2025-09-25
+Version: 1.2.0
+Date: 2026-01-21
 Authors@R: c(person("Sam", "Watson", email = "S.I.Watson@bham.ac.uk",
                   role = c("aut", "cre")))
 Description: Specification, analysis, simulation, and fitting of generalised linear mixed models. 
-  Includes Markov Chain Monte Carlo Maximum likelihood and Laplace approximation model fitting for a range of models, 
+  Includes Markov Chain Monte Carlo Maximum likelihood model fitting for a range of models, 
   non-linear fixed effect specifications, a wide range of flexible covariance functions that can be combined arbitrarily,
   robust and bias-corrected standard error estimation, power calculation, data simulation, and more. 
-  See <https://samuel-watson.github.io/glmmr-web/> for a detailed manual.
 License: GPL (>= 2)
 Imports: methods, Rcpp (>= 1.0.11), R6, rstan (>= 2.32.1), rstantools
         (>= 2.3.1.1)
-LinkingTo: Rcpp (>= 1.0.11), RcppEigen, SparseChol (>= 0.3.2), BH,
-        RcppParallel (>= 5.0.1), rstan (>= 2.32.1), StanHeaders (>=
-        2.32.0)
+LinkingTo: Rcpp (>= 1.0.11), RcppEigen, BH, RcppParallel (>= 5.0.1),
+        rstan (>= 2.32.1), StanHeaders (>= 2.32.0)
 RoxygenNote: 7.3.2
 NeedsCompilation: yes
 Author: Sam Watson [aut, cre]
@@ -27,7 +25,7 @@ SystemRequirements: GNU make
 Encoding: UTF-8
 Config/testthat/edition: 3
 LazyData: true
-Packaged: 2025-09-29 08:53:40 UTC; WatsonSI
+Packaged: 2026-01-21 09:57:03 UTC; WatsonSI
 Maintainer: Sam Watson <S.I.Watson@bham.ac.uk>
 Repository: CRAN
-Date/Publication: 2025-09-29 15:10:02 UTC
+Date/Publication: 2026-01-21 10:50:02 UTC
