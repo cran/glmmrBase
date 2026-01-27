@@ -901,10 +901,13 @@ Model <- R6::R6Class("Model",
                        #' # conjugate gradient descent
                        #' # the maximum number of iterations is increased as it takes 100-110 in this example
                        #' # we can also chain together the functions
+                       #' # specify starting values for the covariance parameters to prevent potential fit failure
+                       #' # with random initialisation on the log scale
                        #' glm3 <- Model$new(
                        #'   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
                        #'   data = Salamanders,
-                       #'   family = binomial()
+                       #'   family = binomial(),
+                       #'   covariance = c(-0.5,-0.5)
                        #' )$MCML(method = "mcnr2", mcmc.pkg = "analytic", iter.sampling = 50, max.iter = 150)
                        #'
                        #' # Example using simulated data
@@ -923,16 +926,16 @@ Model <- R6::R6Class("Model",
                        #' )
                        #' ysim <- des$sim_data() # simulate some data from the model
                        #' fit1 <- des$MCML(y = ysim) # Default model fitting with SAEM
-                       #' # use MCNR instead and stop when parameter values are within 1e-2 on successive iterations
-                       #' fit2 <- des$MCML(y = ysim, method="mcnr",tol=1e-2,conv.criterion = 1)
+                       #' # use MCNR instead 
+                       #' fit2 <- des$MCML(y = ysim, method="mcnr")
                        #' 
                        #' # Non-linear model fitting example using the example provided by nlmer in lme4
                        #' data(Orange, package = "lme4")
                        #' 
                        #' # the lme4 example:
-                       #' startvec <- c(Asym = 200, xmid = 725, scal = 350)
-                       #' (nm1 <- lme4::nlmer(circumference ~ SSlogis(age, Asym, xmid, scal) ~ Asym|Tree,
-                       #'               Orange, start = startvec))
+                       #' # startvec <- c(Asym = 200, xmid = 725, scal = 350)
+                       #' # (nm1 <- lme4::nlmer(circumference ~ SSlogis(age, Asym, xmid, scal) ~ Asym|Tree,
+                       #' #              Orange, start = startvec))
                        #' 
                        #' Orange <- as.data.frame(Orange)
                        #' Orange$Tree <- as.numeric(Orange$Tree)
@@ -953,7 +956,6 @@ Model <- R6::R6Class("Model",
                        #' nfit <- model$MCML(method = "mcem.adapt", iter.sampling = 1000)
                        #' 
                        #' summary(nfit)
-                       #' summary(nm1)
                        #' 
                        #' 
                        #'}
@@ -1440,19 +1442,23 @@ Model <- R6::R6Class("Model",
                        #' @return A `mcml` model fit object
                        #' @examples
                        #' # Simulated trial data example using REML
+                       #' # specify covariance starting values to potential prevent fit failure with random intialisation
                        #'data(SimTrial,package = "glmmrBase")
                        #' fit1 <- Model$new(
                        #'   formula = y ~ int + factor(t) - 1 + (1|grlog(cl)*ar0log(t)),
                        #'   data = SimTrial,
-                       #'   family = gaussian()
+                       #'   family = gaussian(),
+                       #'   covariance = log(c(0.05,0.8)),
                        #' )$fit(reml = TRUE)
                        #' 
                        #' # Salamanders data example
                        #' data(Salamanders,package="glmmrBase")
+                       #' # specify covariance starting values to prevent potential fit failure with random intialisation
                        #' model <- Model$new(
                        #'   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
                        #'   data = Salamanders,
-                       #'   family = binomial()
+                       #'   family = binomial(),
+                       #'   covariance = c(-0.5, -0.5)
                        #' )
                        #' 
                        #' fit2 <- model$fit()

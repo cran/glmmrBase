@@ -1,7 +1,7 @@
-a74fd22df85d539807d86aa18d8ff7db *DESCRIPTION
+c06f2aee2141f0baef757ed6096d702e *DESCRIPTION
 816985561c0721559b0ed1c62992c428 *NAMESPACE
-ca90790309c9c0bf230086d981ec6a2d *R/Betadist.R
-1ed333d833a75db29209cd567c96b9c0 *R/R6Model.R
+798fb5013f40bc6af1dd01c8df3d35e6 *R/Betadist.R
+7778ed91e64596ae499cd5ce7543f669 *R/R6Model.R
 e6dfdf10fafe0b7cf8067ad2ae2f061d *R/R6covariance.R
 bf05376bbbfaf75a7360bfa89008d44a *R/R6meanfunction.R
 a8f4d07663f0d6b8f9e64c1653044f3c *R/RcppExports.R
@@ -13,7 +13,7 @@ bd4287bd989d8e3511a0035abd87b3a5 *R/printfunctions.R
 23c0fc36c295d531ef891befb05f1a2a *R/quantiledist.R
 f54667170dd61fbceea864ddde8a6871 *R/stanmodels.R
 76d8ff12e1e6b2e515961ea707f6b2a5 *README.md
-f65d653f234c417e3df21db097c3712c *build/partial.rdb
+820d5e112dbd51cf0e502b7fbc5e1cb4 *build/partial.rdb
 7e297a31e37e77c201a2bacff2f979eb *configure
 845efca43973cdde1a6174faf1d88e99 *configure.win
 207f0bfae6393e3a185e8c61ae7526b2 *data/Salamanders.rda
@@ -58,7 +58,7 @@ f4dbc976a578ad17c3ef7aba8d1b679d *inst/stan/mcml.stan
 db147c6285de88a4f90cffa8bfb8938e *man/Beta.Rd
 7dd9424c2aa8acde6c2ba0e0ff021357 *man/Covariance.Rd
 ec59cfee00e92e306928768b647acb05 *man/MeanFunction.Rd
-dcd5c2e36dd57dc0ffde15051682a8b4 *man/Model.Rd
+f9fcaf49e191614bfa1b2a2342f21791 *man/Model.Rd
 abf2a8263c0f63f4c2c99b26907338a7 *man/Quantile.Rd
 002e99cf9dbe93c84a0d22533ffa14f0 *man/Salamanders.Rd
 6463bf8665b6e18534cbfeeb4533133f *man/SimGeospat.Rd
@@ -68,7 +68,7 @@ f6d06d6f273e546b80c3de336d8f9408 *man/coef.Model.Rd
 db5a9e44a93f2f44aecea53db0360638 *man/confint.mcml.Rd
 f1484366d67230f928b25ec32316f332 *man/cross_df.Rd
 eaaebc7d1b25327b100227d81bf40562 *man/cycles.Rd
-a994152468b1e64ac67cb68ad810f74e *man/exponential.Rd
+8c25d9fd122adebc2cda032e6e7faed2 *man/exponential.Rd
 b22286d99d95e0b02eecbac35e309e49 *man/family.Model.Rd
 c76e5ae0b361231370c475f622fb16bf *man/family.mcml.Rd
 d9f704d080d7a8bc37f73464c72acec8 *man/fitted.Model.Rd
