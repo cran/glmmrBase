@@ -4,7 +4,7 @@
 \alias{exponential}
 \title{Exponential distribution declaration}
 \usage{
-exponential(link = "log")
+exponential(link = "logit")
 }
 \arguments{
 \item{link}{Name of link function. Only accepts `logit` currently.}

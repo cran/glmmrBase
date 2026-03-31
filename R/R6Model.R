@@ -621,10 +621,6 @@ Model <- R6::R6Class("Model",
                          if(oim & !private$y_has_been_updated) stop("No y data has been added")
                          private$update_ptr()
                          nonlin <- Model__any_nonlinear(private$ptr,private$model_type())
-                         # if(nonlin){
-                         #   if(!private$y_has_been_updated) stop("No y data has been added")
-                         #   # if(!hessian.corr %in% c("add","return","none"))stop("hessian.corr must be add, return, or none")
-                         # }
                          if(oim){
                            M <- Model__observed_information_matrix(private$ptr,private$model_type())
                          } else {
@@ -634,30 +630,14 @@ Model <- R6::R6Class("Model",
                              if(include.re & !private$model_type()>0){
                                M <- Model__obs_information_matrix(private$ptr,private$model_type())
                              } else {
-                               if(private$model_type()==0){
+                               if(private$model_type()==0 | private$model_type()==2){
                                  M <- Model__information_matrix(private$ptr,private$model_type())
                                } else {
                                  M <- Model__information_matrix_crude(private$ptr,private$model_type())
                                }
                              }
-                             # if((nonlin & hessian.corr%in%c("add","none")) | !nonlin){
-                             #   
-                             # }
-                             # if(Model__any_nonlinear(private$ptr,private$model_type()) & hessian.corr %in% c("add","return")){
-                             #   A <- Model__hessian_correction(private$ptr,private$model_type())
-                             #   if(any(eigen(A)$values < 0) & adj.nonspd){
-                             #     if(adj.nonspd)message("Hessian correction for non-linear parameters is not positive semi-definite and will be adjusted. To disable this feature set adj.nonspd = FALSE")
-                             #     A <- near_semi_pd(A)
-                             #   }
-                             #   if(hessian.corr == "add"){
-                             #     M <- M + A
-                             #   } else {
-                             #     M <- A
-                             #   }
-                             # }
                            }
                          }
-                         
                          return(M)
                        },
                        #' @description 
@@ -901,13 +881,10 @@ Model <- R6::R6Class("Model",
                        #' # conjugate gradient descent
                        #' # the maximum number of iterations is increased as it takes 100-110 in this example
                        #' # we can also chain together the functions
-                       #' # specify starting values for the covariance parameters to prevent potential fit failure
-                       #' # with random initialisation on the log scale
                        #' glm3 <- Model$new(
                        #'   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
                        #'   data = Salamanders,
-                       #'   family = binomial(),
-                       #'   covariance = c(-0.5,-0.5)
+                       #'   family = binomial()
                        #' )$MCML(method = "mcnr2", mcmc.pkg = "analytic", iter.sampling = 50, max.iter = 150)
                        #'
                        #' # Example using simulated data
@@ -926,16 +903,16 @@ Model <- R6::R6Class("Model",
                        #' )
                        #' ysim <- des$sim_data() # simulate some data from the model
                        #' fit1 <- des$MCML(y = ysim) # Default model fitting with SAEM
-                       #' # use MCNR instead 
-                       #' fit2 <- des$MCML(y = ysim, method="mcnr")
+                       #' # use MCNR instead and stop when parameter values are within 1e-2 on successive iterations
+                       #' fit2 <- des$MCML(y = ysim, method="mcnr",tol=1e-2,conv.criterion = 1)
                        #' 
                        #' # Non-linear model fitting example using the example provided by nlmer in lme4
                        #' data(Orange, package = "lme4")
                        #' 
                        #' # the lme4 example:
-                       #' # startvec <- c(Asym = 200, xmid = 725, scal = 350)
-                       #' # (nm1 <- lme4::nlmer(circumference ~ SSlogis(age, Asym, xmid, scal) ~ Asym|Tree,
-                       #' #              Orange, start = startvec))
+                       #' startvec <- c(Asym = 200, xmid = 725, scal = 350)
+                       #' (nm1 <- lme4::nlmer(circumference ~ SSlogis(age, Asym, xmid, scal) ~ Asym|Tree,
+                       #'               Orange, start = startvec))
                        #' 
                        #' Orange <- as.data.frame(Orange)
                        #' Orange$Tree <- as.numeric(Orange$Tree)
@@ -956,6 +933,7 @@ Model <- R6::R6Class("Model",
                        #' nfit <- model$MCML(method = "mcem.adapt", iter.sampling = 1000)
                        #' 
                        #' summary(nfit)
+                       #' summary(nm1)
                        #' 
                        #' 
                        #'}
@@ -1003,7 +981,12 @@ Model <- R6::R6Class("Model",
                          if(!mcmc.pkg %in% c("cmdstan","rstan","analytic"))stop("mcmc.pkg must be one of cmdstan, rstan, or analytic")
                          if(importance & mcmc.pkg != "analytic")stop("Importance sampling only available with mcmc.pkg= analytic")
                          if(importance & method == "saem")stop("Importance sampling not compatible with SAEM")
-                         
+                         if(private$model_type() == 2){
+                           hsgp_vals <- self$covariance$hsgp()
+                           hsgp_dim <- Model_hsgp__dim(private$ptr)
+                           if(length(hsgp_vals[["m"]]) != hsgp_dim) hsgp_vals[["m"]] <- rep(hsgp_vals[["m"]][1],hsgp_dim)
+                           Model_hsgp__set_approx_pars(private$ptr, hsgp_vals[["m"]], hsgp_vals[["L"]])
+                         }
                          if(grepl("mcnr2",method)){
                            dbl_nr <- TRUE
                            method <- gsub("2","",method)
@@ -1442,23 +1425,19 @@ Model <- R6::R6Class("Model",
                        #' @return A `mcml` model fit object
                        #' @examples
                        #' # Simulated trial data example using REML
-                       #' # specify covariance starting values to potential prevent fit failure with random intialisation
                        #'data(SimTrial,package = "glmmrBase")
                        #' fit1 <- Model$new(
                        #'   formula = y ~ int + factor(t) - 1 + (1|grlog(cl)*ar0log(t)),
                        #'   data = SimTrial,
-                       #'   family = gaussian(),
-                       #'   covariance = log(c(0.05,0.8)),
+                       #'   family = gaussian()
                        #' )$fit(reml = TRUE)
                        #' 
                        #' # Salamanders data example
                        #' data(Salamanders,package="glmmrBase")
-                       #' # specify covariance starting values to prevent potential fit failure with random intialisation
                        #' model <- Model$new(
                        #'   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
                        #'   data = Salamanders,
-                       #'   family = binomial(),
-                       #'   covariance = c(-0.5, -0.5)
+                       #'   family = binomial()
                        #' )
                        #' 
                        #' fit2 <- model$fit()
@@ -1481,11 +1460,20 @@ Model <- R6::R6Class("Model",
                        #' des$update_y(ysim)
                        #' fit2 <- des$fit() 
                        #' @md
-                       fit = function(niter = 100, max_iter = 30, tol = ifelse(self$family[[1]]=="gaussian"&self$family[[2]]=="identity",1e-6,10), hist = 5, k0 = 10, reml = TRUE){
-                         if(self$family[[1]]=="gaussian"&self$family[[2]]=="identity")Model__use_reml(private$ptr,reml,private$model_type())
+                       fit = function(niter = 100, max_iter = 30, 
+                                      tol = ifelse(self$family[[1]]=="gaussian"&self$family[[2]]=="identity",1e-6,10), 
+                                      hist = 5, k0 = 10, reml = TRUE){
+                         if((self$family[[1]]=="gaussian"&self$family[[2]]=="identity") | private$model_type() == 2)Model__use_reml(private$ptr,reml,private$model_type())
+                         if(private$model_type() == 2){
+                           hsgp_vals <- self$covariance$hsgp()
+                           hsgp_dim <- Model_hsgp__dim(private$ptr)
+                           if(length(hsgp_vals[["m"]]) != hsgp_dim) hsgp_vals[["m"]] <- rep(hsgp_vals[["m"]][1],hsgp_dim)
+                           Model_hsgp__set_approx_pars(private$ptr, hsgp_vals[["m"]], hsgp_vals[["L"]])
+                         }
                          Model__fit(private$ptr, niter, max_iter, TRUE, tol, hist, k0, private$model_type())
                          self$update_parameters(mean.pars = Model__get_beta(private$ptr, private$model_type()),
                                                 cov.pars = Model__get_theta(private$ptr, private$model_type()))
+                         if(private$model_type() == 2) self$covariance$.__enclos_env__$private$genZ()
                          u <- Model__u(private$ptr,TRUE,private$model_type())
                          M <- self$information_matrix() 
                          M <- solve(M)
@@ -1950,92 +1938,99 @@ Model <- R6::R6Class("Model",
                            }
                            
                            if(self$family[[1]]=="bernoulli" & any(self$trials>1))self$family[[1]] <- "binomial"
-                           if(is.null(self$covariance$parameters)){
-                             if(type == 0){
-                               private$ptr <- Model__new(form,
-                                                         as.matrix(data),
-                                                         colnames(data),
-                                                         tolower(self$family[[1]]),
-                                                         self$family[[2]])
-                             } else if(type==1){
-                               nngp <- self$covariance$nngp()
-                               private$ptr <- Model_nngp__new(form,
-                                                              as.matrix(data),
-                                                              colnames(data),
-                                                              tolower(self$family[[1]]),
-                                                              self$family[[2]],
-                                                              nngp[2])
-                             } else if(type==2){
-                               private$ptr <- Model_hsgp__new(form,
-                                                              as.matrix(data),
-                                                              colnames(data),
-                                                              tolower(self$family[[1]]),
-                                                              self$family[[2]])
-                             } else {
-                               n_A <- nrow(self$covariance$data) / self$covariance$.__enclos_env__$private$time
-                               self$covariance$data <- self$covariance$data[1:n_A,]
-                               private$ptr <- Model_ar__new(form,
+                           # if(is.null(self$covariance$parameters)){
+                           #   
+                           # } else {
+                           #   if(type == 0){
+                           #     private$ptr <- Model__new_w_pars(form,
+                           #                                      as.matrix(data),
+                           #                                      colnames(data),
+                           #                                      tolower(self$family[[1]]),
+                           #                                      self$family[[2]],
+                           #                                      self$mean$parameters,
+                           #                                      self$covariance$parameters)
+                           #   } else if(type==1){
+                           #     nngp <- self$covariance$nngp()
+                           #     private$ptr <- Model_nngp__new_w_pars(form,
+                           #                                           as.matrix(data),
+                           #                                           colnames(data),
+                           #                                           tolower(self$family[[1]]),
+                           #                                           self$family[[2]],
+                           #                                           self$mean$parameters,
+                           #                                           self$covariance$parameters,
+                           #                                           nngp[2])
+                           #   } else if(type==2){
+                           #     private$ptr <- Model_hsgp__new_w_pars(form,
+                           #                                           as.matrix(data),
+                           #                                           colnames(data),
+                           #                                           tolower(self$family[[1]]),
+                           #                                           self$family[[2]],
+                           #                                           self$mean$parameters,
+                           #                                           self$covariance$parameters)
+                           #   } else if(type==3){
+                           #     n_A <- nrow(self$covariance$data) / self$covariance$.__enclos_env__$private$time
+                           #     self$covariance$data <- self$covariance$data[1:n_A,]
+                           #     private$ptr <- Model_ar__new(form,
+                           #                                  as.matrix(data),
+                           #                                  as.matrix(self$covariance$data),
+                           #                                  colnames(data),
+                           #                                  colnames(self$covariance$data),
+                           #                                  tolower(self$family[[1]]),
+                           #                                  self$family[[2]],
+                           #                                  self$covariance$.__enclos_env__$private$time)
+                           #     Model__update_beta(private$ptr,self$mean$parameters,type)
+                           #     Model__update_theta(private$ptr,self$covariance$parameters,type)
+                           #   }
+                           # }
+                           
+                           if(type == 0){
+                             private$ptr <- Model__new(form,
+                                                       as.matrix(data),
+                                                       colnames(data),
+                                                       tolower(self$family[[1]]),
+                                                       self$family[[2]])
+                           } else if(type==1){
+                             nngp <- self$covariance$nngp()
+                             private$ptr <- Model_nngp__new(form,
                                                             as.matrix(data),
-                                                            as.matrix(self$covariance$data),
                                                             colnames(data),
-                                                            colnames(self$covariance$data),
                                                             tolower(self$family[[1]]),
                                                             self$family[[2]],
-                                                            self$covariance$.__enclos_env__$private$time)
-                             }
-                             
-                             Model__update_beta(private$ptr,self$mean$parameters,type)
-                             ncovpar <- Model__n_cov_pars(private$ptr,type)
-                             self$covariance$parameters <- runif(ncovpar,0,0.2)
-                             Model__update_theta(private$ptr,self$covariance$parameters,type)
-                             re <- Model__re_terms(private$ptr,type)
-                             paridx <- Model__parameter_fn_index(private$ptr,type)+1
-                             names(self$covariance$parameters) <- re[paridx]
-                             self$covariance$.__enclos_env__$private$model_ptr <- private$ptr
-                             self$covariance$.__enclos_env__$private$ptr <- NULL
-                             self$covariance$.__enclos_env__$private$cov_form()
+                                                            nngp[2])
+                           } else if(type==2){
+                             private$ptr <- Model_hsgp__new(form,
+                                                            as.matrix(data),
+                                                            colnames(data),
+                                                            tolower(self$family[[1]]),
+                                                            self$family[[2]])
                            } else {
-                             if(type == 0){
-                               private$ptr <- Model__new_w_pars(form,
-                                                                as.matrix(data),
-                                                                colnames(data),
-                                                                tolower(self$family[[1]]),
-                                                                self$family[[2]],
-                                                                self$mean$parameters,
-                                                                self$covariance$parameters)
-                             } else if(type==1){
-                               nngp <- self$covariance$nngp()
-                               private$ptr <- Model_nngp__new_w_pars(form,
-                                                                     as.matrix(data),
-                                                                     colnames(data),
-                                                                     tolower(self$family[[1]]),
-                                                                     self$family[[2]],
-                                                                     self$mean$parameters,
-                                                                     self$covariance$parameters,
-                                                                     nngp[2])
-                             } else if(type==2){
-                               private$ptr <- Model_hsgp__new_w_pars(form,
-                                                                     as.matrix(data),
-                                                                     colnames(data),
-                                                                     tolower(self$family[[1]]),
-                                                                     self$family[[2]],
-                                                                     self$mean$parameters,
-                                                                     self$covariance$parameters)
-                             } else if(type==3){
-                               n_A <- nrow(self$covariance$data) / self$covariance$.__enclos_env__$private$time
-                               self$covariance$data <- self$covariance$data[1:n_A,]
-                               private$ptr <- Model_ar__new(form,
-                                                            as.matrix(data),
-                                                            as.matrix(self$covariance$data),
-                                                            colnames(data),
-                                                            colnames(self$covariance$data),
-                                                            tolower(self$family[[1]]),
-                                                            self$family[[2]],
-                                                            self$covariance$.__enclos_env__$private$time)
-                               Model__update_beta(private$ptr,self$mean$parameters,type)
-                               Model__update_theta(private$ptr,self$covariance$parameters,type)
-                             }
+                             n_A <- nrow(self$covariance$data) / self$covariance$.__enclos_env__$private$time
+                             self$covariance$data <- self$covariance$data[1:n_A,]
+                             private$ptr <- Model_ar__new(form,
+                                                          as.matrix(data),
+                                                          as.matrix(self$covariance$data),
+                                                          colnames(data),
+                                                          colnames(self$covariance$data),
+                                                          tolower(self$family[[1]]),
+                                                          self$family[[2]],
+                                                          self$covariance$.__enclos_env__$private$time)
                            }
+                           
+                           Model__update_beta(private$ptr,self$mean$parameters,type)
+                           if(type==2 & !is.null(self$covariance$parameters) & length(self$covariance$parameters) > 2){
+                             Model_hsgp__set_anisotropic(private$ptr)
+                           }
+                           ncovpar <- Model__n_cov_pars(private$ptr,type)
+                           if(is.null(self$covariance$parameters)){
+                             self$covariance$parameters <- runif(ncovpar,0,0.2)
+                           } 
+                           Model__update_theta(private$ptr,self$covariance$parameters,type)
+                           re <- Model__re_terms(private$ptr,type)
+                           paridx <- Model__parameter_fn_index(private$ptr,type)+1
+                           names(self$covariance$parameters) <- re[paridx]
+                           # self$covariance$.__enclos_env__$private$model_ptr <- private$ptr
+                           # self$covariance$.__enclos_env__$private$ptr <- NULL
+                           # self$covariance$.__enclos_env__$private$cov_form()
                            
                            Model__set_offset(private$ptr,self$mean$offset,type)
                            Model__set_weights(private$ptr,self$weights,type)
