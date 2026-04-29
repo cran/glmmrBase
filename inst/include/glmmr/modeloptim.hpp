@@ -42,7 +42,6 @@ public:
     double  rhoend = 0;
     double  epsilon = 1e-4; 
     bool    select_one = true; 
-    bool    trisect_once = false; 
     int     max_eval = 0; 
     double  alpha = 0.8;
     bool    saem = false;
@@ -71,8 +70,6 @@ public:
   void            ml_beta();
   template<class algo, typename = std::enable_if_t<std::is_base_of<optim_algo, algo>::value> >
   void            ml_theta();
-  template<class algo, typename = std::enable_if_t<std::is_base_of<optim_algo, algo>::value> >
-  void            ml_all();
   virtual double  aic();
   virtual ArrayXd optimum_weights(double N, VectorXd C, double tol = 1e-5, int max_iter = 501);
   void            set_bobyqa_control(int npt_, double rhobeg_, double rhoend_);
@@ -89,7 +86,6 @@ public:
   // functions to optimise
   double          log_likelihood_beta(const dblvec &beta);
   double          log_likelihood_theta(const dblvec &theta);
-  double          log_likelihood_all(const dblvec &par);
   bool            check_convergence(const double tol, const int hist, const int k, const int k0);
   
 protected:
@@ -161,6 +157,8 @@ inline void glmmr::ModelOptim<modeltype>::ml_beta(){
     op.template fn<&glmmr::ModelOptim<bits_hsgp>::log_likelihood_beta, glmmr::ModelOptim<bits_hsgp> >(this);
   } else if constexpr (std::is_same_v<modeltype,bits_ar1>){
     op.template fn<&glmmr::ModelOptim<bits_ar1>::log_likelihood_beta, glmmr::ModelOptim<bits_ar1> >(this);
+  } else if constexpr (std::is_same_v<modeltype,bits_spde>){
+    op.template fn<&glmmr::ModelOptim<bits_spde>::log_likelihood_beta, glmmr::ModelOptim<bits_spde> >(this);
   }
   op.minimise();
   int eval_size = control.saem ? re.mcmc_block_size : ll_current.rows();
@@ -199,52 +197,15 @@ inline void glmmr::ModelOptim<modeltype>::ml_theta(){
     op.template fn<&glmmr::ModelOptim<bits_nngp>::log_likelihood_theta, glmmr::ModelOptim<bits_nngp> >(this);
   } else if constexpr (std::is_same_v<modeltype,bits_hsgp>){
     op.template fn<&glmmr::ModelOptim<bits_hsgp>::log_likelihood_theta, glmmr::ModelOptim<bits_hsgp> >(this);
+  } else if constexpr (std::is_same_v<modeltype,bits_ar1>){
+    op.template fn<&glmmr::ModelOptim<bits_ar1>::log_likelihood_theta, glmmr::ModelOptim<bits_ar1> >(this);
+  }else if constexpr (std::is_same_v<modeltype,bits_spde>){
+    op.template fn<&glmmr::ModelOptim<bits_spde>::log_likelihood_theta, glmmr::ModelOptim<bits_spde> >(this);
   }
   op.minimise();
   int eval_size = control.saem ? re.mcmc_block_size : ll_current.rows();
   current_ll_values.second = ll_current.col(1).tail(eval_size).mean();
   current_ll_var.second = (ll_current.col(1).tail(eval_size) - ll_current.col(1).tail(eval_size).mean()).square().sum() / (eval_size - 1);
-  calculate_var_par();
-}
-
-template<typename modeltype>
-template<class algo, typename>
-inline void glmmr::ModelOptim<modeltype>::ml_all(){
-  if(model.covariance.parameters_.size()==0)throw std::runtime_error("no covariance parameters, cannot calculate log likelihood");
-  dblvec start = get_start_values(true,true,false);  
-  dblvec lower = get_lower_values(true,true,false);
-  dblvec upper = get_upper_values(true,true,false);
-  // store previous log likelihood values for convergence calculations
-  previous_ll_values.second = current_ll_values.second;
-  previous_ll_var.second = current_ll_var.second;
-  previous_ll_values.first = previous_ll_values.second;
-  previous_ll_var.first = previous_ll_var.second;
-  if(re.scaled_u_.cols() != re.u_.cols())re.scaled_u_.resize(NoChange,re.u_.cols());
-  re.scaled_u_ = model.covariance.Lu(re.u_);  
-  if(control.reml) generate_czz();
-  // optimisation
-  optim<double(const std::vector<double>&),algo> op(start);
-  if constexpr (std::is_same_v<algo,BOBYQA>) {
-    set_bobyqa_control(op);
-    op.set_bounds(lower,upper);
-  } else if constexpr (std::is_same_v<algo,NEWUOA>) {
-    set_newuoa_control(op);
-    op.set_bounds(lower,upper);
-  }
-  if constexpr (std::is_same_v<modeltype,bits>)
-  {
-    op.template fn<&glmmr::ModelOptim<bits>::log_likelihood_all, glmmr::ModelOptim<bits> >(this);
-  } else if constexpr (std::is_same_v<modeltype,bits_nngp>) {
-    op.template fn<&glmmr::ModelOptim<bits_nngp>::log_likelihood_all, glmmr::ModelOptim<bits_nngp> >(this);
-  } else if constexpr (std::is_same_v<modeltype,bits_hsgp>){
-    op.template fn<&glmmr::ModelOptim<bits_hsgp>::log_likelihood_all, glmmr::ModelOptim<bits_hsgp> >(this);
-  }
-  op.minimise();
-  int eval_size = control.saem ? re.mcmc_block_size : ll_current.rows();
-  current_ll_values.second = ll_current.col(1).tail(eval_size).mean();
-  current_ll_var.second = (ll_current.col(1).tail(eval_size) - ll_current.col(1).tail(eval_size).mean()).square().sum() / (eval_size - 1);
-  current_ll_values.first = current_ll_values.second;
-  current_ll_var.first = current_ll_var.second;
   calculate_var_par();
 }
 
@@ -283,54 +244,57 @@ inline double glmmr::ModelOptim<bits_hsgp>::marginal_log_likelihood(){
   int p = model.linear_predictor.P();
   int Mspec = model.covariance.Q();
   
-  double sigma2 = model.data.var_par;
-  double sigma2_inv = 1.0 / sigma2;
-  double sigma4_inv = sigma2_inv * sigma2_inv;
-  
   MatrixXd ZPhi = model.covariance.ZPhi();
   MatrixXd X = model.linear_predictor.X();
-  VectorXd r = model.data.y.matrix() - model.linear_predictor.xb();
-  
   ArrayXd Lambda = model.covariance.LambdaSPD();
   ArrayXd inv_lambda = 1.0 / Lambda;
   
-  MatrixXd G = ZPhi.transpose() * ZPhi;
-  MatrixXd C = ZPhi.transpose() * X;
-  VectorXd c = ZPhi.transpose() * r;
+  // Compute eta, mu, W at current beta and posterior mode of u
+  VectorXd b = re.u_mean_;
+  ArrayXd eta = (model.linear_predictor.xb() + ZPhi * b).array() 
+    + model.data.offset.array();
+  ArrayXd mu = maths::mod_inv_func(eta.matrix(), model.family.link).array();
   
-  // M = diag(1/Lambda) + sigma^{-2} G
-  MatrixXd Mmat = sigma2_inv * G;
+  ArrayXd W_inv;  // working variance per observation
+  ArrayXd working_resid;  // (y - mu) * d eta/d mu
+  
+  switch(model.family.family){
+  case Fam::gaussian:
+    W_inv = (model.data.variance / model.data.weights).matrix();
+    working_resid = model.data.y.array() - mu;
+    break;
+  case Fam::binomial: case Fam::bernoulli: {
+    ArrayXd p_logit = mu / model.data.variance;  // probability
+    W_inv = 1.0 / (model.data.variance * p_logit * (1.0 - p_logit));
+    working_resid = (model.data.y.array() - mu) * W_inv;  // (y - mu) / W = d eta/d mu * (y - mu)
+    break;
+  }
+  case Fam::poisson:
+    W_inv = 1.0 / mu;
+    working_resid = (model.data.y.array() - mu) / mu;  // d eta/d mu = 1/mu
+    break;
+  default:
+    throw std::runtime_error("Marginal QL only for Gaussian/Binomial/Poisson");
+  }
+  
+  VectorXd r = working_resid.matrix();
+  ArrayXd W_diag = 1.0 / W_inv;  // the IRLS weights
+  MatrixXd WZPhi = (ZPhi.array().colwise() * W_diag).matrix();
+  MatrixXd G = ZPhi.transpose() * WZPhi;  // Phi^T W Phi (n cancels into W)
+  VectorXd c = WZPhi.transpose() * r;
+  
+  MatrixXd Mmat = G;
   Mmat.diagonal() += inv_lambda.matrix();
   LLT<MatrixXd> llt_M(Mmat);
   VectorXd M_inv_c = llt_M.solve(c);
   
-  // log|V| = log|D| + n*log(sigma2) + log|M|
-  // D = diag(Lambda), so log|D| = sum(log(Lambda))
+  double logdet_Winv = -W_diag.log().sum();
   double logdetD = Lambda.log().sum();
   double logdetM = 2.0 * llt_M.matrixL().toDenseMatrix().diagonal().array().log().sum();
-  double logdetV = logdetD + n * std::log(sigma2) + logdetM;
-  
-  // r^T V^{-1} r via Woodbury
-  double rtr = r.squaredNorm();
-  double quadform = sigma2_inv * rtr - sigma4_inv * c.dot(M_inv_c);
-  
-  double ll;
-  if(control.reml){
-    MatrixXd XtX = X.transpose() * X;
-    MatrixXd M_inv_C = llt_M.solve(C);
-    MatrixXd XtVinvX = sigma2_inv * XtX - sigma4_inv * C.transpose() * M_inv_C;
-    LLT<MatrixXd> llt_XtVinvX(XtVinvX);
-    double logdetXtVinvX = 2.0 * llt_XtVinvX.matrixL().toDenseMatrix().diagonal().array().log().sum();
-    
-    VectorXd XtVinvr = sigma2_inv * X.transpose() * r - sigma4_inv * C.transpose() * M_inv_c;
-    VectorXd adj = llt_XtVinvX.solve(XtVinvr);
-    double adj_quadform = XtVinvr.dot(adj);
-    quadform -= adj_quadform;
-    
-    ll = -0.5 * ((n - p) * std::log(2 * M_PI) + logdetV + logdetXtVinvX + quadform);
-  } else {
-    ll = -0.5 * (n * std::log(2 * M_PI) + logdetV + quadform);
-  }
+  double logdetV = logdet_Winv + logdetD + logdetM;
+  double rWr = (r.array().square() * W_diag).sum();
+  double quadform = rWr - c.dot(M_inv_c);
+  double ll = -0.5 * (n * std::log(2*M_PI) + logdetV + quadform);
   
   return ll;
 }
@@ -451,25 +415,6 @@ inline void glmmr::ModelOptim<modeltype>::add_reml_corr(const int col){
   ll_current.col(col).array() += -0.5*trCZZ;
 }
 
-template<typename modeltype>
-inline double glmmr::ModelOptim<modeltype>::log_likelihood_all(const dblvec &par)
-{
-  int G = model.covariance.npar();
-  auto first = par.begin();
-  auto last1 = par.begin() + P();
-  auto last2 = par.begin() + P() + G;
-  dblvec beta(first,last1);
-  dblvec theta(last1,last2);
-  model.linear_predictor.update_parameters(beta);
-  model.covariance.update_parameters(theta);
-  re.zu_ = model.covariance.ZLu(re.u_);
-  fn_counter.second += re.scaled_u_.cols();
-  double ll = log_likelihood();
-  if(control.reml)add_reml_corr(0);
-  if(control.saem) ll = saem_average(0);
-  ll_current.col(1) = ll_current.col(0);
-  return -1*ll;
-}
 
 
 
@@ -477,6 +422,11 @@ template<typename modeltype>
 inline double glmmr::ModelOptim<modeltype>::log_likelihood_beta(const dblvec& beta)
 {
   model.linear_predictor.update_parameters(beta);
+  if(model.family.family==Fam::gaussian){
+    matrix.posterior_u_samples(1, false, false, false);
+    re.zu_.resize(NoChange, 1);
+    re.zu_.col(0) = model.covariance.ZLu(re.u_mean_);
+  }
   double ll = log_likelihood();
   fn_counter.first += re.scaled_u_.cols();
   if(control.saem)ll = saem_average(0);
@@ -667,7 +617,7 @@ inline double glmmr::ModelOptim<modeltype>::log_likelihood(bool beta) {
   }
   double out = 0;
   for(int j = 0; j< ll_current.rows(); j++) out += re.u_weight_(j) * ll_current(j,llcol);
-  return out; //ll_current.col(llcol).mean();
+  return out; 
 }
 
 template<typename modeltype>
@@ -741,7 +691,7 @@ inline void glmmr::ModelOptim<modeltype>::generate_czz()
 {
   CZZ.resize(Q(),Q());
   CZZ = MatrixXd::Identity(Q(), Q());
-  matrix.W.update();
+  matrix.W.update(re.centred_u_mean());
   VectorXd w = matrix.W.W();
   // w = w.array().inverse().matrix();
   bool nonlinear_w = model.family.family != Fam::gaussian || (model.data.weights != 1).any();
@@ -873,11 +823,14 @@ inline void glmmr::ModelOptim<modeltype>::nr_beta(){
   MatrixXd zd = matrix.linpred();
   MatrixXd X = model.linear_predictor.X();
   
-  VectorXd xb = X * model.linear_predictor.parameter_vector();
-  double xb_mean = xb.mean();
-  for(int i = 0; i < zd.cols(); i++){
-    double zu_mean = zd.col(i).mean() - xb_mean;
-    zd.col(i).array() -= zu_mean;
+  VectorXd xb     = X * model.linear_predictor.parameter_vector();
+  VectorXd offset = model.data.offset;       // or however it's accessed
+  double xb_off_mean = (xb + offset).mean();
+  if(zd.cols() > 1){
+    for(int i = 0; i < zd.cols(); i++){
+      double zu_mean = zd.col(i).mean() - xb_off_mean;
+      zd.col(i).array() -= zu_mean;
+    }
   }
   
   ArrayXd nvar_par(model.n());
@@ -920,7 +873,6 @@ inline void glmmr::ModelOptim<modeltype>::nr_beta(){
     for(int i = 0; i < niter; ++i){
       resid += re.u_weight_(i) * (model.data.y - zd.col(i));
     }
-    //resid = model.data.y - zd.rowwise().mean();
   }
 
   #pragma omp parallel
@@ -1561,9 +1513,15 @@ inline void glmmr::ModelOptim<bits_hsgp>::nr_theta(){
   }
   
   // Precompute Phi * diag(d sqrt(Lambda)/d theta_j) for observation-space Hessian
+  // std::vector<MatrixXd> Phi_dj(npars);
+  // for(int j = 0; j < npars; j++){
+  //   Phi_dj[j] = Phi * dsqrt_lambda.col(j).matrix().asDiagonal();
+  // }
+  
   std::vector<MatrixXd> Phi_dj(npars);
   for(int j = 0; j < npars; j++){
-    Phi_dj[j] = Phi * dsqrt_lambda.col(j).matrix().asDiagonal();
+    ArrayXd scale = 0.5 * lambda_deriv.col(j) * inv_lambda;
+    Phi_dj[j] = Phi * scale.matrix().asDiagonal();
   }
   
   // --- Prior gradient: deterministic + MC ---
@@ -1571,12 +1529,19 @@ inline void glmmr::ModelOptim<bits_hsgp>::nr_theta(){
   for(int j = 0; j < npars; j++){
     grad(j) = -0.5 * (lambda_deriv.col(j) * inv_lambda).sum();
   }
-  for(int i = 0; i < n_iter; i++){
-    double w_i = re.u_weight_(i);
-    // u_ is in u-space, so quadratic form uses u^2/Lambda^2
-    ArrayXd u2 = re.u_.col(i).array().square();
+  if(n_iter == 1){
+    ArrayXd second_moment = re.u_.col(0).array().square() + re.u_var_diag_.array();
     for(int j = 0; j < npars; j++){
-      grad(j) += 0.5 * w_i * (u2 * lambda_deriv.col(j) * inv_lambda2).sum();
+      grad(j) += 0.5 * (second_moment * lambda_deriv.col(j) * inv_lambda2).sum();
+    }
+  } else {
+    for(int i = 0; i < n_iter; i++){
+      double w_i = re.u_weight_(i);
+      // u_ is in u-space, so quadratic form uses u^2/Lambda^2
+      ArrayXd u2 = re.u_.col(i).array().square();
+      for(int j = 0; j < npars; j++){
+        grad(j) += 0.5 * w_i * (u2 * lambda_deriv.col(j) * inv_lambda2).sum();
+      }
     }
   }
   
@@ -1640,38 +1605,26 @@ inline void glmmr::ModelOptim<bits_hsgp>::nr_theta(){
     }
   }
   
+  
   // --- REML correction to gradient ---
   if(control.reml){
     int P = model.linear_predictor.P();
     MatrixXd X = model.linear_predictor.X();  // n × P
-    
-    // C = diag(1/Lambda) + Phi' diag(W_avg) Phi   [M × M]
     MatrixXd PhiW = Phi.transpose() * W_avg.matrix().asDiagonal();   // M × n
     MatrixXd C_mat = inv_lambda.matrix().asDiagonal().toDenseMatrix();
     C_mat.noalias() += PhiW * Phi;
-    
-    // PhiWX = Phi' diag(W_avg) X   [M × P]
     MatrixXd WX = W_avg.matrix().asDiagonal() * X;
     MatrixXd PhiWX = Phi.transpose() * WX;
-    
-    // Solve C
     Eigen::LLT<MatrixXd> llt_C(C_mat);
     if(llt_C.info() == Eigen::Success){
       MatrixXd C_inv_PhiWX = llt_C.solve(PhiWX);           // M × P
-      
-      // R = diag(1/Lambda) C^{-1} PhiWX   [M × P]
-      // (Woodbury simplification: Phi' V^{-1} X = diag(1/Lambda) C^{-1} Phi'WX)
       MatrixXd R = inv_lambda.matrix().asDiagonal() * C_inv_PhiWX;
-      
-      // X' V^{-1} X = X'WX - PhiWX' C^{-1} PhiWX   [P × P]
       MatrixXd XtVinvX = X.transpose() * WX;
       XtVinvX.noalias() -= PhiWX.transpose() * C_inv_PhiWX;
       
       Eigen::LLT<MatrixXd> llt_XVX(XtVinvX);
       if(llt_XVX.info() == Eigen::Success){
         MatrixXd S = llt_XVX.solve(MatrixXd::Identity(P, P));  // P × P
-        
-        // trace((X'V^{-1}X)^{-1} R' diag(dLambda_j) R) per parameter
         MatrixXd T = R * S;                                     // M × P
         ArrayXd TR_diag = (T.array() * R.array()).rowwise().sum();  // M
         
@@ -1706,7 +1659,7 @@ inline void glmmr::ModelOptim<bits_hsgp>::nr_theta(){
   
   double max_step = 1.0;
   double step_norm = step.array().abs().maxCoeff();
-  if(step_norm > max_step) step *= max_step / step_norm;
+  if(n_iter > 1 && step_norm > max_step) step *= max_step / step_norm;
   
   logtheta += step;
   
@@ -1724,7 +1677,89 @@ inline void glmmr::ModelOptim<bits_hsgp>::nr_theta(){
   calculate_var_par();
 }
 
-
+template<>
+inline void glmmr::ModelOptim<bits_spde>::nr_theta(){
+  if(re.scaled_u_.cols() != re.u_.cols()) re.scaled_u_.resize(NoChange, re.u_.cols());
+  previous_ll_values.second = current_ll_values.second;
+  previous_ll_var.second    = current_ll_var.second;
+  
+  auto& cov = model.covariance;
+  if(!cov.spde_loaded){
+    throw std::runtime_error("SPDE nr_theta: spde_data() has not been loaded.");
+  }
+  if(!cov.chol_Q_current) cov.refactor_Q();
+  const int n_iter = re.u_.cols();
+  const int M      = cov.Q();           // n_v
+  const int npars  = cov.npar();        // 2 (σ², λ)
+  auto [tr_grad, tr_hess] = cov.traces_for_lambda(50);
+  VectorXd trace_term(npars);
+  trace_term(0) = -static_cast<double>(M);
+  trace_term(1) = tr_grad;//cov.trace_Qinv_dQ_log_lambda_hutch();   // triggers Takahashi if stale
+  MatrixXd scores(npars, n_iter);       // column k = score vector for sample k
+  VectorXd grad = VectorXd::Zero(npars);
+  
+  // MC path — weighted average over posterior samples.
+  for(int k = 0; k < n_iter; ++k){
+    const VectorXd& u_k = re.u_.col(k);
+    const double w_k    = re.u_weight_(k);
+    
+    double qf_Q = cov.quad_form_Q(u_k);
+    double qf_l = cov.quad_form_dQ_log_lambda(u_k);
+    
+    scores(0, k) = -0.5 * static_cast<double>(M) + 0.5 * qf_Q;
+    scores(1, k) =  0.5 * trace_term(1)          - 0.5 * qf_l;
+    
+    grad += w_k * scores.col(k);
+  }
+  MatrixXd Hess(npars, npars);
+  Hess(0, 0) = 0.5 * static_cast<double>(M);
+  Hess(0, 1) = -0.5 * trace_term(1);
+  Hess(1, 0) =  Hess(0, 1);
+  Hess(1, 1) = 0.5 * tr_hess;//cov.trace_Qinv_dQ_Qinv_dQ_lambda();
+  cov.infomat_theta = Hess;
+  
+  // --- NR step on log-scale parameters, with same damping/clamping as HSGP ---
+  bool logpars = cov.all_log_re();
+  VectorXd logtheta(npars);
+  if(logpars){
+    logtheta = Map<VectorXd>(cov.parameters_.data(), cov.parameters_.size());
+  } else {
+    for(int j = 0; j < npars; ++j) logtheta(j) = std::log(cov.parameters_[j]);
+  }
+  
+  double lambda_damp = 1e-4 * Hess.diagonal().array().abs().maxCoeff();
+  MatrixXd Hess_reg  = Hess;
+  Hess_reg.diagonal().array() += lambda_damp;
+  
+  VectorXd step;
+  Eigen::LLT<MatrixXd> llt_H(Hess_reg);
+  if(llt_H.info() == Eigen::Success){
+    step = llt_H.solve(grad);
+  } else {
+    step = grad.array() / Hess.diagonal().array().abs().max(1e-6);
+  }
+  
+  const double max_step  = 1.0;
+  const double step_norm = step.array().abs().maxCoeff();
+  if(n_iter > 1 && step_norm > max_step) step *= max_step / step_norm;
+  
+  logtheta += step;
+  
+  if(logpars){
+    dblvec newpars(logtheta.data(), logtheta.data() + logtheta.size());
+    cov.update_parameters(newpars);
+  } else {
+    cov.update_parameters(logtheta.array().exp());
+  }
+  
+  gradients.tail(grad.size()) = grad.array();
+  bool weighted = re.u_weight_.maxCoeff() - re.u_weight_.minCoeff() > 1e-10;
+  re.update_zu(weighted);
+  current_ll_values.second = log_likelihood(false);
+  current_ll_var.second    = (ll_current.col(1) - ll_current.col(1).mean())
+                .square().sum() / (ll_current.col(1).size() - 1);
+  
+}
 
 template<typename modeltype>
 inline void glmmr::ModelOptim<modeltype>::update_var_par(const double& v){

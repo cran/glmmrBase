@@ -153,6 +153,10 @@ Model_hsgp__new <- function(formula_, data_, colnames_, family_, link_) {
     .Call(`_glmmrBase_Model_hsgp__new`, formula_, data_, colnames_, family_, link_)
 }
 
+Model_spde__new <- function(formula_, data_, colnames_, family_, link_) {
+    .Call(`_glmmrBase_Model_spde__new`, formula_, data_, colnames_, family_, link_)
+}
+
 Model_hsgp__new_w_pars <- function(formula_, data_, colnames_, family_, link_, beta_, theta_) {
     .Call(`_glmmrBase_Model_hsgp__new_w_pars`, formula_, data_, colnames_, family_, link_, beta_, theta_)
 }
@@ -207,6 +211,10 @@ Model__update_W <- function(xp, type = 0L) {
 
 Model__get_W <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__get_W`, xp, type)
+}
+
+Model__get_gradients <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__get_gradients`, xp, type)
 }
 
 Model__use_reml <- function(xp, reml = TRUE, type = 0L) {
@@ -265,10 +273,6 @@ Model__ml_theta <- function(xp, algo = 0L, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__ml_theta`, xp, algo, type))
 }
 
-Model__ml_all <- function(xp, algo = 0L, type = 0L) {
-    invisible(.Call(`_glmmrBase_Model__ml_all`, xp, algo, type))
-}
-
 Model__nr_beta <- function(xp, type = 0L) {
     invisible(.Call(`_glmmrBase_Model__nr_beta`, xp, type))
 }
@@ -283,6 +287,10 @@ Model__Sigma <- function(xp, inverse, type = 0L) {
 
 Model__information_matrix <- function(xp, type = 0L) {
     .Call(`_glmmrBase_Model__information_matrix`, xp, type)
+}
+
+Model__ave_information_matrix <- function(xp, type = 0L) {
+    .Call(`_glmmrBase_Model__ave_information_matrix`, xp, type)
 }
 
 Model__check_convergence <- function(xp, tol, hist, k, k0, type = 0L) {
@@ -429,6 +437,10 @@ Model_hsgp__set_approx_pars <- function(xp, m_, L_) {
     invisible(.Call(`_glmmrBase_Model_hsgp__set_approx_pars`, xp, m_, L_))
 }
 
+Model_spde__set_spde_data <- function(xp, A_, C_diag_, G_, alpha_) {
+    invisible(.Call(`_glmmrBase_Model_spde__set_spde_data`, xp, A_, C_diag_, G_, alpha_))
+}
+
 Covariance_hsgp__set_approx_pars <- function(xp, m_, L_) {
     invisible(.Call(`_glmmrBase_Covariance_hsgp__set_approx_pars`, xp, m_, L_))
 }
@@ -543,6 +555,22 @@ Model__cov_deriv <- function(xp, type = 0L) {
 
 Model__predict <- function(xp, newdata_, newoffset_, m, type = 0L) {
     .Call(`_glmmrBase_Model__predict`, xp, newdata_, newoffset_, m, type)
+}
+
+Model_spde__predict <- function(xp, newdata_, newoffset_, A_new_, m) {
+    .Call(`_glmmrBase_Model_spde__predict`, xp, newdata_, newoffset_, A_new_, m)
+}
+
+Model_spde__re_var <- function(xp) {
+    .Call(`_glmmrBase_Model_spde__re_var`, xp)
+}
+
+Model_spde__re_var_at <- function(xp, A_) {
+    .Call(`_glmmrBase_Model_spde__re_var_at`, xp, A_)
+}
+
+Model_hsgp__re_var <- function(xp) {
+    .Call(`_glmmrBase_Model_hsgp__re_var`, xp)
 }
 
 Model__predict_re <- function(xp, newdata_, newoffset_, m, type = 0L) {

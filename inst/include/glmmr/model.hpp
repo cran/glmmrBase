@@ -589,7 +589,11 @@ inline void glmmr::Model<modeltype>::fit(const int niter, const int max_iter, co
     if(model.family.family==Fam::gaussian){
       if(optim.trace > 0)Rcpp::Rcout << "\n-------------- ITER: " << iter << " ------------" << std::endl;
       auto t1 = high_resolution_clock::now();
-      optim.nr_beta_gaussian();
+      if(model.linear_predictor.calc.any_nonlinear){
+        optim.template ml_beta<BOBYQA>();
+      } else {
+        optim.nr_beta_gaussian();
+      }
       auto t2 = high_resolution_clock::now();
       duration<double, std::milli> ms_double = t2 - t1;
       if(optim.trace > 0)Rcpp::Rcout << "TIMING STEP 1 (nr beta): " << ms_double.count() << "ms" << std::endl;
@@ -618,7 +622,11 @@ inline void glmmr::Model<modeltype>::fit(const int niter, const int max_iter, co
       auto t2 = high_resolution_clock::now();
       duration<double, std::milli> ms_double = t2 - t1;
       if(optim.trace > 0)Rcpp::Rcout << "TIMING STEP 1 (posterior u sample): " << ms_double.count() << "ms" << std::endl;
-      optim.nr_beta();
+      if(model.linear_predictor.calc.any_nonlinear){
+        optim.template ml_beta<BOBYQA>();
+      } else {
+        optim.nr_beta();
+      }
       check_for_errors("beta step");
       auto t3 = high_resolution_clock::now();
       ms_double = t3 - t2;
@@ -636,12 +644,19 @@ inline void glmmr::Model<modeltype>::fit(const int niter, const int max_iter, co
         if(optim.trace > 0) Rcpp::Rcout << "\nrho: " << model.covariance.rho;
       }
       if(optim.trace > 0)Rcpp::Rcout << "\nu: " << re.u_.topRows(5).rowwise().mean().transpose();
-      if (iter > 2) {
-        converged = optim.check_convergence(tol,hist,iter,k0);
+      if(niter > 1){
+        if (iter > 2) {
+          converged = optim.check_convergence(tol,hist,iter,k0);
+          if(optim.trace > 0) if (converged) Rcpp::Rcout << "\nCONVERGED!";
+        }
+      } else {
+        double ll_new = optim.marginal_log_likelihood();
+        converged = ll_new - ll_old < tol;
+        if(optim.trace > 0)Rcpp::Rcout << "\nLog likelihood (new | previous): " << ll_new << " | " << ll_old << " Diff: " << ll_new - ll_old << std::endl;
+        ll_old = ll_new;
         if(optim.trace > 0) if (converged) Rcpp::Rcout << "\nCONVERGED!";
       }
     }
-    
     iter++;
   }
 }
