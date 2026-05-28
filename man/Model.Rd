@@ -39,8 +39,7 @@ to, for individual \emph{i} \eqn{\left( \frac{(\partial h^{-1}(\eta_i))}{\partia
 (see Table 2.1 in McCullagh and Nelder (1989)). The modification proposed by Zegers et al to the linear predictor to
 improve the accuracy of approximations based on the marginal quasilikelihood is also available, see \code{use_attenuation()}.
 
-See \href{https://github.com/samuel-watson/glmmrBase/blob/master/README.md}{glmmrBase} for a
-detailed guide on model specification. A detailed vingette for this package is also available online\url{doi:10.48550/arXiv.2303.12657}.
+A detailed vingette for this package is also available online \url{doi:10.48550/arXiv.2303.12657}.
 
 \strong{Attenuation}
 For calculations such as the information matrix, the first-order approximation to the covariance matrix
@@ -178,12 +177,14 @@ des$power() #power of 0.90 for the int parameter
 ## ------------------------------------------------
 
 # Simulated trial data example using REML
+# we set starting values to prevent errors on example checking - these are not strictly necessary
 set.seed(123)
 data(SimTrial,package = "glmmrBase")
 fit1 <- Model$new(
   formula = y ~ int + factor(t) - 1 + (1|grlog(cl)*ar0log(t)),
   data = SimTrial,
-  family = gaussian()
+  family = gaussian(),
+  covariance = log(c(0.05,0.7))
 )$fit(reml = TRUE)
 
 # Salamanders data example
@@ -191,7 +192,8 @@ data(Salamanders,package="glmmrBase")
 model <- Model$new(
   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
   data = Salamanders,
-  family = binomial()
+  family = binomial(),
+  covariance = log(c(0.05,0.7))
 )
 set.seed(125)
 fit2 <- model$fit()
@@ -988,12 +990,14 @@ A \code{mcml} model fit object
 \subsection{Examples}{
 \if{html}{\out{<div class="r example copy">}}
 \preformatted{# Simulated trial data example using REML
+# we set starting values to prevent errors on example checking - these are not strictly necessary
 set.seed(123)
 data(SimTrial,package = "glmmrBase")
 fit1 <- Model$new(
   formula = y ~ int + factor(t) - 1 + (1|grlog(cl)*ar0log(t)),
   data = SimTrial,
-  family = gaussian()
+  family = gaussian(),
+  covariance = log(c(0.05,0.7))
 )$fit(reml = TRUE)
 
 # Salamanders data example
@@ -1001,7 +1005,8 @@ data(Salamanders,package="glmmrBase")
 model <- Model$new(
   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
   data = Salamanders,
-  family = binomial()
+  family = binomial(),
+  covariance = log(c(0.05,0.7))
 )
 set.seed(125)
 fit2 <- model$fit()

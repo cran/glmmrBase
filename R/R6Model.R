@@ -30,8 +30,7 @@
 #' (see Table 2.1 in McCullagh and Nelder (1989)). The modification proposed by Zegers et al to the linear predictor to
 #' improve the accuracy of approximations based on the marginal quasilikelihood is also available, see `use_attenuation()`.
 #'
-#' See \href{https://github.com/samuel-watson/glmmrBase/blob/master/README.md}{glmmrBase} for a
-#' detailed guide on model specification. A detailed vingette for this package is also available online<doi:10.48550/arXiv.2303.12657>.
+#' A detailed vingette for this package is also available online <doi:10.48550/arXiv.2303.12657>.
 #' @references
 #' Breslow, N. E., Clayton, D. G. (1993). Approximate Inference in Generalized Linear Mixed Models.
 #' Journal of the American Statistical Association<, 88(421), 9–25. <doi:10.1080/01621459.1993.10594284>
@@ -795,12 +794,14 @@ Model <- R6::R6Class("Model",
                        #' @return A `mcml` model fit object
                        #' @examples
                        #' # Simulated trial data example using REML
+                       #' # we set starting values to prevent errors on example checking - these are not strictly necessary
                        #' set.seed(123)
                        #'data(SimTrial,package = "glmmrBase")
                        #' fit1 <- Model$new(
                        #'   formula = y ~ int + factor(t) - 1 + (1|grlog(cl)*ar0log(t)),
                        #'   data = SimTrial,
-                       #'   family = gaussian()
+                       #'   family = gaussian(),
+                       #'   covariance = log(c(0.05,0.7))
                        #' )$fit(reml = TRUE)
                        #' 
                        #' # Salamanders data example
@@ -808,7 +809,8 @@ Model <- R6::R6Class("Model",
                        #' model <- Model$new(
                        #'   mating~fpop:mpop-1+(1|grlog(mnum))+(1|grlog(fnum)),
                        #'   data = Salamanders,
-                       #'   family = binomial()
+                       #'   family = binomial(),
+                       #'   covariance = log(c(0.05,0.7))
                        #' )
                        #' set.seed(125)
                        #' fit2 <- model$fit()
