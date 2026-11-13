@@ -1,7 +1,7 @@
-7ec5d3a0901f6f102ea9381288925666 *DESCRIPTION
+905a9cd7aa11ba65c1c9c4ef05183e3a *DESCRIPTION
 90cb69f356fa70b973c3f6ba19223960 *NAMESPACE
 ca90790309c9c0bf230086d981ec6a2d *R/Betadist.R
-4f77af4b72279e1178781107dd7b01f7 *R/R6Model.R
+5b5cf578a605b168cf82b4b7b0377d6e *R/R6Model.R
 aacf6af5b120429003f48ba2e5675f20 *R/R6covariance.R
 65a313bb52b85fe69f5274f9a8303bdf *R/R6meanfunction.R
 9bd3fb57c8a52c41522411512aed178d *R/RcppExports.R
@@ -11,7 +11,7 @@ b8c5ef948149f02c5f7cf8cc3a66b6d9 *R/model_s3_functions.R
 5e389abde8df9ddbd031e9ebd1606ec7 *R/nelder.R
 bd4287bd989d8e3511a0035abd87b3a5 *R/printfunctions.R
 23c0fc36c295d531ef891befb05f1a2a *R/quantiledist.R
-cb8ddddd2c50e8b40f5b28399e21ab1d *build/partial.rdb
+3bab792bad8d785d7a99b4c7be44e4a0 *build/partial.rdb
 207f0bfae6393e3a185e8c61ae7526b2 *data/Salamanders.rda
 0d6638fede562bd7ebf61e34253199b3 *data/SimGeospat.rda
 d0b0353a56cd257720885281d7dd96c1 *data/SimTrial.rda
@@ -25,7 +25,7 @@ d0b0353a56cd257720885281d7dd96c1 *data/SimTrial.rda
 eda836099fbcfc28d332a35f3db59125 *inst/include/glmmr/formulaparse.h
 bf5c17e3fd7232fb6a6e380f2d6286e6 *inst/include/glmmr/general.h
 1e0b3bfac886c70b6701d00d091c81e4 *inst/include/glmmr/griddata.hpp
-7edcc84e6705a8d124bbb6c4ef81a05f *inst/include/glmmr/hsgpcovariance.hpp
+3692b758b14bf9cf53a34a2939696dae *inst/include/glmmr/hsgpcovariance.hpp
 48d92a0d941f88638cb5b1011bbfd801 *inst/include/glmmr/instructions.h
 931bf97e7a42721fce5301e2bead5b6e *inst/include/glmmr/interpreter.h
 9f16341d65828d78815e5e24d294e1da *inst/include/glmmr/linearpredictor.hpp
@@ -35,8 +35,8 @@ bf5c17e3fd7232fb6a6e380f2d6286e6 *inst/include/glmmr/general.h
 dde15b58aa5c5acbb4d06f0a724e0c0c *inst/include/glmmr/model.hpp
 3c3696d2d90b6f866d2fa0d2f3c3e015 *inst/include/glmmr/modelbits.hpp
 2419fbdab2c76249aae80e362dbb3733 *inst/include/glmmr/modelextradata.hpp
-ff72735670628670fe3ff4fdf4883e60 *inst/include/glmmr/modelmatrix.hpp
-cdbe1a19ae554d929906c6535d70df88 *inst/include/glmmr/modeloptim.hpp
+66bbff833ba929439ea7c4ee73a3f553 *inst/include/glmmr/modelmatrix.hpp
+fda1d7af88658d249d26c91795171304 *inst/include/glmmr/modeloptim.hpp
 6e896ddccad70548478ce22dd8328cea *inst/include/glmmr/nngpcovariance.hpp
 9feb22830ca93fb5df92d6b68c76be51 *inst/include/glmmr/openmpheader.h
 c8a37ebeb4443b6316dbe0a08d689875 *inst/include/glmmr/optim/bobyqa_algo.h
@@ -45,10 +45,10 @@ c8a37ebeb4443b6316dbe0a08d689875 *inst/include/glmmr/optim/bobyqa_algo.h
 0860c81c1c183e2914f47a2fadf10a01 *inst/include/glmmr/optim/newuoa_impl.h
 c484c39dcfc3a0778e04d41c4bd4e783 *inst/include/glmmr/optim/optim.h
 8aa27d92742cd67947d0a18f81e9e6d8 *inst/include/glmmr/randomeffects.hpp
-63de4fe1e1a07ef1af5f22af7b2707ed *inst/include/glmmr/spdecovariance.hpp
+e6aff46634fa74d0ac12c5142b0cf9f1 *inst/include/glmmr/spdecovariance.hpp
 d55fb4caabaf6a8b27d276c6156ec462 *man/Beta.Rd
-7dd9424c2aa8acde6c2ba0e0ff021357 *man/Covariance.Rd
-ec59cfee00e92e306928768b647acb05 *man/MeanFunction.Rd
+b0f1ad1b32d3a40ee4d93e99e904933e *man/Covariance.Rd
+ed19f31003b75f27d243f16e9a602e47 *man/MeanFunction.Rd
 f52809d16998d1513270c8b8b2869fde *man/Model.Rd
 abf2a8263c0f63f4c2c99b26907338a7 *man/Quantile.Rd
 34b2c7aad3328804ad8dacab0141e56c *man/Salamanders.Rd
@@ -75,9 +75,9 @@ ec94768f88d38ed4c411343b3391ce96 *man/formula.Model.Rd
 eee06b654a68e9322b1b165f868bff35 *man/logLik.mcml.Rd
 6faba21bb214f21048655975a3e3f561 *man/match_rows.Rd
 0955ec5727333cf156f3661dcfc7bf2a *man/mcml_glmer.Rd
-00b3d618f64bf4adbc4ba670ad3004c2 *man/mcml_lmer.Rd
+d8ad8be47cde85a9f84d83982336f130 *man/mcml_lmer.Rd
 ddc38be4ca68bd6cf18c2988f4916805 *man/mcnr_family.Rd
-61e18acb6e8088b682f1e8c3e168c959 *man/mesh_helper.Rd
+ad18f16b65985a6ddc886b71eb152d95 *man/mesh_helper.Rd
 a778e627b8f69d614ae3fea10a933c68 *man/nelder.Rd
 fa4335692e3032c30fd114dcbbae2ee6 *man/nest_df.Rd
 653b96d2e7d606fafdf29dd0ec851521 *man/predict.Model.Rd
@@ -95,4 +95,4 @@ ba1d18551f6bdb7bda70711bc01d38b9 *man/vcov.mcml.Rd
 7135d59bdd2ad97739148f1c4a634163 *src/Makevars
 8f97e35c6e313c4089117824ef6fb33b *src/Makevars.win
 87f215993783dea38867ea4ee187b267 *src/RcppExports.cpp
-5739c1fa08b0fcea820fd80d4a616997 *src/model_module.cpp
+980b86805490b30ead44c093f635adbb *src/model_module.cpp
